@@ -463,18 +463,60 @@ function drawDeckStructures(geo) {
 
 function drawGunPorts(geo) {
     const { gunDeckYs, bowFairX, sternFairX } = geo;
-    const gunClr = state.appearance.gunPortColor;
+    const lidColor      = state.appearance.gunPortColor;   // user‑selected lid colour
+    const frameColor    = "#2a1a0c";                       // dark frame
+    const highlightColor = lighten(lidColor, 25);          // top bevel
+
     for (let d = 0; d < state.hullStructures.gunDecks; d++) {
         const dy = gunDeckYs[d];
-        const pCnt = d === 0 ? state.armament.gunPortsLower : (d === 1 ? state.armament.gunPortsUpper : 0);
+        const pCnt = d === 0 ? state.armament.gunPortsLower
+                    : d === 1 ? state.armament.gunPortsUpper : 0;
         if (pCnt <= 0) continue;
+
         const startX = bowFairX + 22;
-        const endX = sternFairX - 30;
-        const step = (endX - startX) / Math.max(1, pCnt - 1);
+        const endX   = sternFairX - 30;
+        const step   = (endX - startX) / Math.max(1, pCnt - 1);
+
         for (let i = 0; i < pCnt; i++) {
             const px = startX + i * step;
-            onto("armamentLayer", el("rect", { x: px - 8, y: dy - 7, width: 16, height: 12, fill: gunClr, stroke: "#1a1208", "stroke-width": "1.5", rx: "2" }));
-            onto("armamentLayer", el("line", { x1: px - 12, y1: dy - 3, x2: px - 8, y2: dy - 3, stroke: "#0d0a06", "stroke-width": "3.5" }));
+
+            // 1. Outer frame (dark, slightly larger)
+            onto("armamentLayer", el("rect", {
+                x: px - 10, y: dy - 9,
+                width: 20, height: 16,
+                fill: frameColor,
+                stroke: "#0d0a06",
+                "stroke-width": "1",
+                rx: "2"
+            }));
+
+            // 2. Lid (user colour, covers the inner area)
+            onto("armamentLayer", el("rect", {
+                x: px - 8, y: dy - 7,
+                width: 16, height: 12,
+                fill: lidColor,
+                stroke: frameColor,
+                "stroke-width": "1",
+                rx: "1"
+            }));
+
+            // 3. Top bevel highlight (thin light line along the upper edge of the lid)
+            onto("armamentLayer", el("line", {
+                x1: px - 7, y1: dy - 6.5,
+                x2: px + 7, y2: dy - 6.5,
+                stroke: highlightColor,
+                "stroke-width": "1.2",
+                opacity: "0.9"
+            }));
+
+            // 4. Subtle shadow below the frame (gives depth)
+            onto("armamentLayer", el("rect", {
+                x: px - 10, y: dy - 3,
+                width: 20, height: 6,
+                fill: "#050302",
+                opacity: "0.35",
+                rx: "1"
+            }));
         }
     }
 }
