@@ -25,17 +25,32 @@ function getDefs() {
 // =====================================================
 // SAIL PATH HELPERS (shared between rig types)
 // =====================================================
-function curvedSailPath(mastX, yardY, sailWidth, sailHeight) {
+function curvedSailPath(mastX, yardY, sailWidth, sailHeight, tilt = 0) {
     const hw = sailWidth / 2;
     const leftX   = mastX - hw;
     const rightX  = mastX + hw;
     const bottomY = yardY + sailHeight;
-    const topBelly    = sailHeight * -0.05;   // upward arch (wind fill)
-    const bottomBelly = sailHeight * 0.10;   // downward belly
-    return `M ${leftX},${yardY} ` +
-           `Q ${mastX},${yardY - topBelly} ${rightX},${yardY} ` +
-           `L ${rightX},${bottomY} ` +
-           `Q ${mastX},${bottomY + bottomBelly} ${leftX},${bottomY} ` +
+
+    // Tilt offsets
+    const topLeftY    = yardY - tilt;
+    const topRightY   = yardY + tilt;
+    const bottomLeftY = bottomY - tilt;
+    const bottomRightY = bottomY + tilt;
+
+    // Top edge curve 
+    const topMidY   = (topLeftY + topRightY) / 2;
+    const topBelly  = sailHeight * 0.05;
+    const topCtrlY  = topMidY + topBelly;
+
+    // Bottom edge curve (positive belly = wind fill)
+    const bottomMidY   = (bottomLeftY + bottomRightY) / 2;
+    const bottomBelly  = sailHeight * 0.10;
+    const bottomCtrlY  = bottomMidY + bottomBelly;
+
+    return `M ${leftX},${topLeftY} ` +
+           `Q ${mastX},${topCtrlY} ${rightX},${topRightY} ` +
+           `L ${rightX},${bottomRightY} ` +
+           `Q ${mastX},${bottomCtrlY} ${leftX},${bottomLeftY} ` +
            `Z`;
 }
 
@@ -90,10 +105,9 @@ function drawStandingRigging(geo) {
         return seg ? seg.yTop : null;
     }
 
-    // For each mast, determine highest usable head for stays and backstays:
-    // topgallant if exists, else topmast if exists, else lower head (fallback)
+    // For each mast, determine highest usable head for stays and backstays
     const mastHeads = mastData.map(mast => {
-        let headY = segmentTop(mast, "lower"); // always exists
+        let headY = segmentTop(mast, "lower");
         let headName = "lower";
         if (segmentTop(mast, "topgallant") !== null) {
             headY = segmentTop(mast, "topgallant");
@@ -106,7 +120,6 @@ function drawStandingRigging(geo) {
     });
 
     // ----- STAYS -----
-    // Forestay: bowsprit tip → foremast head
     if (mastData.length >= 1) {
         onto("riggingLayer", el("line", {
             x1: bspritTipX, y1: bspritTipY,
@@ -115,7 +128,6 @@ function drawStandingRigging(geo) {
         }));
     }
 
-    // Mainstay: foremast head → mainmast head
     if (mastData.length >= 2) {
         onto("riggingLayer", el("line", {
             x1: mastData[0].x, y1: mastHeads[0].y,
@@ -124,7 +136,6 @@ function drawStandingRigging(geo) {
         }));
     }
 
-    // Mizzenstay: mainmast head → mizzen head
     if (mastData.length >= 3) {
         onto("riggingLayer", el("line", {
             x1: mastData[1].x, y1: mastHeads[1].y,
@@ -139,25 +150,19 @@ function drawStandingRigging(geo) {
         const xMast = mast.x;
         const lowerHeadY = segmentTop(mast, "lower");
         const topmastHeadY = segmentTop(mast, "topmast");
-        // fallback if no topmast (unlikely) but just in case
-        const effectiveTopmastHeadY = topmastHeadY !== null ? topmastHeadY : lowerHeadY;
 
         // Lower shrouds
         const lowerBaseY = weatherDeckY + 8;
         const lowerSpread = hullLength * 0.065;
-        // draw shrouds
         for (let s = 0; s < lowerShroudCount; s++) {
-            const t = s / (lowerShroudCount - 1); // 0 to 1
-            // fan out: innermost shroud less spread, outermost more
+            const t = s / (lowerShroudCount - 1);
             const lx = xMast - lowerSpread * (0.5 + t * 0.7);
             const rx = xMast + lowerSpread * (0.5 + t * 0.7);
-            // left
             onto("riggingLayer", el("line", {
                 x1: lx, y1: lowerBaseY,
                 x2: xMast, y2: lowerHeadY,
                 stroke: shroudStroke, "stroke-width": "1.6", opacity: "0.8"
             }));
-            // right
             onto("riggingLayer", el("line", {
                 x1: rx, y1: lowerBaseY,
                 x2: xMast, y2: lowerHeadY,
@@ -165,7 +170,7 @@ function drawStandingRigging(geo) {
             }));
         }
 
-        // Platform (top) at lower head – only if a topmast exists
+        // Platform only if a topmast exists
         if (topmastHeadY !== null) {
             const platformHalfWidth = hullLength * 0.04;
             const platformY = lowerHeadY;
@@ -174,7 +179,6 @@ function drawStandingRigging(geo) {
                 x2: xMast + platformHalfWidth, y2: platformY,
                 stroke: "#4a3a2a", "stroke-width": "3", opacity: "0.9"
             }));
-            // small vertical lines at platform edges (optional)
             onto("riggingLayer", el("line", { x1: xMast - platformHalfWidth, y1: platformY-4, x2: xMast - platformHalfWidth, y2: platformY+4, stroke: "#4a3a2a", "stroke-width": "2", opacity: "0.8" }));
             onto("riggingLayer", el("line", { x1: xMast + platformHalfWidth, y1: platformY-4, x2: xMast + platformHalfWidth, y2: platformY+4, stroke: "#4a3a2a", "stroke-width": "2", opacity: "0.8" }));
         }
@@ -193,9 +197,9 @@ function drawStandingRigging(geo) {
             }));
         }
 
-        // Topmast shrouds (if topmast exists)
+        // Topmast shrouds
         if (topmastHeadY !== null && topmastHeadY !== lowerHeadY) {
-            const topBaseY = lowerHeadY; // platform Y
+            const topBaseY = lowerHeadY;
             const topSpread = hullLength * 0.04;
             for (let s = 0; s < topmastShroudCount; s++) {
                 const t = s / (topmastShroudCount - 1);
@@ -228,7 +232,7 @@ function drawStandingRigging(geo) {
             }
         }
 
-        // Backstay (from topmast or topgallant head to stern)
+        // Backstay
         const backstayHeadY = mastHeads[i].y;
         const sternXPoint = sternX - (i === 0 ? 160 : i === 1 ? 100 : 50);
         onto("riggingLayer", el("line", {
@@ -404,10 +408,26 @@ function drawMastsAndSails(geo) {
         const sx = Math.round(bspritRootX + (bspritTipX-bspritRootX)*0.65);
         const sy = Math.round(bspritRootY + (bspritTipY-bspritRootY)*0.65);
         const spritW = 100, spritH = 85;
-        const grp = el("g", { transform: `translate(${sx}, ${sy}) rotate(-15)` });
-        grp.appendChild(el("path", { d: curvedSailPath(0, 0, spritW, spritH), fill: sailColor, stroke: "#b18753", "stroke-width": "1.5" }));
-        onto("sailLayer", grp);
-        onto("riggingLayer", el("line", { x1: sx-spritW/2-10, y1: sy, x2: sx+spritW/2+10, y2: sy, stroke: "#7a5330", "stroke-width": "4" }));
+        const tilt = spritH * 0.15;   // match other sails
+        const hw = spritW / 2;
+        const leftX = sx - hw;
+        const rightX = sx + hw;
+        const topLeftY = sy - tilt;
+        const topRightY = sy + tilt;
+
+        // Tilted yard
+        onto("riggingLayer", el("line", {
+            x1: leftX - 10, y1: topLeftY,
+            x2: rightX + 10, y2: topRightY,
+            stroke: "#7a5330", "stroke-width": "4"
+        }));
+        // Tilted sail
+        onto("sailLayer", el("path", {
+            d: curvedSailPath(sx, sy, spritW, spritH, tilt),
+            fill: sailColor,
+            stroke: "#b18753",
+            "stroke-width": "1.5"
+        }));
     }
 
     // Masts
@@ -425,8 +445,24 @@ function drawMastsAndSails(geo) {
         // Square rig
         if (rigType === "square") {
             for (const yard of mast.yards) {
-                onto("riggingLayer", el("line", { x1: mastX - yard.width/2 - 14, y1: yard.y, x2: mastX + yard.width/2 + 14, y2: yard.y, stroke: "#7a5330", "stroke-width": "5" }));
-                onto("sailLayer", el("path", { d: curvedSailPath(mastX, yard.y, yard.width, yard.height), fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
+                const tilt = yard.height * 0.15;
+                const hw = yard.width / 2;
+                const leftX = mastX - hw;
+                const rightX = mastX + hw;
+                const topLeftY = yard.y - tilt;
+                const topRightY = yard.y + tilt;
+
+                onto("riggingLayer", el("line", {
+                    x1: leftX - 14, y1: topLeftY,
+                    x2: rightX + 14, y2: topRightY,
+                    stroke: "#7a5330", "stroke-width": "5"
+                }));
+                onto("sailLayer", el("path", {
+                    d: curvedSailPath(mastX, yard.y, yard.width, yard.height, tilt),
+                    fill: sailColor,
+                    stroke: "#b8915e",
+                    "stroke-width": "1.5"
+                }));
             }
         }
         // Gaff rig
@@ -448,11 +484,28 @@ function drawMastsAndSails(geo) {
             }
             if (state.masts[idx].gaff.hasSquareTopsail) {
                 const tsW = 155, tsH = 100;
-                const topmastTop = mast.segments.find(s => s.name === "topmast")?.yTop || (weatherDeckY - mastH*0.85);
+                const topmastTop = mast.segments.find(s => s.name === "topmast")?.yTop
+                    || (weatherDeckY - mastH*0.85);
                 const tsY = topmastTop + 35;
                 if (tsY > mast.mastTopY + 8) {
-                    onto("riggingLayer", el("line", { x1: mastX-tsW/2-16, y1: tsY, x2: mastX+tsW/2+16, y2: tsY, stroke: "#7a5330", "stroke-width": "5" }));
-                    onto("sailLayer", el("path", { d: curvedSailPath(mastX, tsY, tsW, tsH), fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
+                    const tilt = tsH * 0.15;
+                    const hw = tsW / 2;
+                    const leftX = mastX - hw;
+                    const rightX = mastX + hw;
+                    const topLeftY = tsY - tilt;
+                    const topRightY = tsY + tilt;
+
+                    onto("riggingLayer", el("line", {
+                        x1: leftX - 16, y1: topLeftY,
+                        x2: rightX + 16, y2: topRightY,
+                        stroke: "#7a5330", "stroke-width": "5"
+                    }));
+                    onto("sailLayer", el("path", {
+                        d: curvedSailPath(mastX, tsY, tsW, tsH, tilt),
+                        fill: sailColor,
+                        stroke: "#b8915e",
+                        "stroke-width": "1.5"
+                    }));
                 }
             }
         }
@@ -483,11 +536,9 @@ function drawMastsAndSails(geo) {
                 onto("sailLayer", el("path", { d: `M ${sx1} ${sy1} Q ${mx} ${my} ${sx2} ${sy2}`, fill: "none", stroke: "#d8c09a", "stroke-width": "0.9", opacity: "0.55" }));
             }
         }
-
-        // NO simple shrouds here anymore – all standing rigging is in drawStandingRigging()
     }
 
-    // ----- DRAW STANDING RIGGING (stays, shrouds, ratlines, backstays) -----
+    // ----- DRAW STANDING RIGGING -----
     drawStandingRigging(geo);
 
     // ----- DRAW STAYSAILS -----

@@ -70,7 +70,7 @@ function buildSquareMast(totalHeight, sails, weatherDeckY, hullLength, hullHeigh
             return { name, width, height: width / aspect };
         });
 
-        const minGap = Math.max(12, hullHeight * 0.08);
+        const minGap = Math.max(12, hullHeight * 0.04);
         const topClearance = Math.max(14, hullHeight * 0.06);
 
         // ----- Deck clearance (20% of hull height + belly allowance) -----
