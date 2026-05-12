@@ -74,13 +74,69 @@ function curvedLateenPath(yardBotX, yardBotY, yardTopX, yardTopY, tackX, tackY) 
     return d;
 }
 
-function drawJib(x0, y0, x1, y1, depth) {
-    onto("sailLayer", el("polygon", {
-        points: `${x0},${y0} ${x1},${y1} ${x0+32},${y0+depth}`,
-        fill: state.appearance.sailColor,
+// drawTriangularSail replaces the old drawJib.
+// Takes explicit tack / head / clew corners and draws the sail with three
+// anatomically correct Bézier-curved edges plus faint panel seam lines.
+function drawTriangularSail(tackX, tackY, headX, headY, clewX, clewY, sailColor) {
+
+    // ---- Control points ----
+    // Luff  (tack → head): leading edge, hugs the forestay – very slight forward belly
+    const luffLen  = Math.hypot(headX - tackX, headY - tackY);
+    const luffMidX = (tackX + headX) / 2;
+    const luffMidY = (tackY + headY) / 2;
+    const luffCtrlX = luffMidX - luffLen * 0.04;   // shift toward bow (-X)
+    const luffCtrlY = luffMidY;
+
+    // Leech (head → clew): free trailing edge – moderate aft belly
+    const leechLen  = Math.hypot(clewX - headX, clewY - headY);
+    const leechMidX = (headX + clewX) / 2;
+    const leechMidY = (headY + clewY) / 2;
+    const leechCtrlX = leechMidX + leechLen * 0.10;  // shift toward stern (+X)
+    const leechCtrlY = leechMidY;
+
+    // Foot  (clew → tack): bottom edge – strongest belly, sags downward
+    const footLen  = Math.hypot(tackX - clewX, tackY - clewY);
+    const footMidX = (clewX + tackX) / 2;
+    const footMidY = (clewY + tackY) / 2;
+    const footCtrlX = footMidX;
+    const footCtrlY = footMidY + footLen * 0.20;    // shift downward (+Y)
+
+    const d = `M ${tackX},${tackY} ` +
+              `Q ${luffCtrlX},${luffCtrlY} ${headX},${headY} ` +
+              `Q ${leechCtrlX},${leechCtrlY} ${clewX},${clewY} ` +
+              `Q ${footCtrlX},${footCtrlY} ${tackX},${tackY} Z`;
+
+    onto("sailLayer", el("path", {
+        d,
+        fill: sailColor,
         stroke: "#b18753",
-        "stroke-width": "2"
+        "stroke-width": "1.8"
     }));
+
+    // ---- Panel seam lines (3 horizontal cloth seams) ----
+    // Each seam connects a point on the luff curve to the corresponding point on the
+    // leech curve, progressing from just below the head down toward foot level.
+    function quadPt(ax, ay, cx, cy, bx, by, t) {
+        const u = 1 - t;
+        return { x: u*u*ax + 2*u*t*cx + t*t*bx,
+                 y: u*u*ay + 2*u*t*cy + t*t*by };
+    }
+    for (let i = 1; i <= 3; i++) {
+        const t = i / 4;
+        // Luff is parameterised tack(0) → head(1), so measuring from the head: use (1-t)
+        const lp = quadPt(tackX, tackY, luffCtrlX, luffCtrlY, headX, headY, 1 - t);
+        // Leech is parameterised head(0) → clew(1), so use t directly
+        const rp = quadPt(headX, headY, leechCtrlX, leechCtrlY, clewX, clewY, t);
+        const mx = (lp.x + rp.x) / 2 + 4;
+        const my = (lp.y + rp.y) / 2 + 5;
+        onto("sailLayer", el("path", {
+            d: `M ${lp.x},${lp.y} Q ${mx},${my} ${rp.x},${rp.y}`,
+            fill: "none",
+            stroke: "#c8a87a",
+            "stroke-width": "0.8",
+            opacity: "0.45"
+        }));
+    }
 }
 
 // =====================================================
@@ -378,14 +434,40 @@ function drawMastsAndSails(geo) {
 
     const foreTopY = mastData[0]?.mastTopY ?? weatherDeckY - 220;
     const foreTopX = mastData[0]?.x ?? (bspritRootX + 100);
+    // Clew is positioned forward of the foremast and well above the deck so the
+    // sail stays compact and doesn't swamp the square sails behind it.
+    const bspritSpan  = foreTopX - bspritRootX;
+    const jibClewX    = bspritRootX + bspritSpan * 0.38;
+    const jibClewY    = weatherDeckY - 75;
 
     if (state.bowspritType === "jib") {
-        drawJib(bspritTipX, bspritTipY, foreTopX-12, foreTopY+28, 70);
+        drawTriangularSail(
+            bspritTipX, bspritTipY,
+            foreTopX - 12, foreTopY + 28,
+            jibClewX, jibClewY,
+            sailColor
+        );
     } else if (state.bowspritType === "twoJibs") {
-        drawJib(bspritTipX, bspritTipY, foreTopX-12, foreTopY+28, 70);
-        const mx = Math.round((bspritTipX+bspritRootX)/2);
-        const my = Math.round((bspritTipY+bspritRootY)/2);
-        drawJib(mx, my, foreTopX+2, foreTopY+68, 55);
+        // Outer jib: same shape
+        drawTriangularSail(
+            bspritTipX, bspritTipY,
+            foreTopX - 12, foreTopY + 28,
+            jibClewX, jibClewY,
+            sailColor
+        );
+        // Inner jib: tack at mid-bowsprit, head at foremast crosstrees,
+        // clew slightly further aft and higher than the outer jib's
+        const mx = Math.round((bspritTipX + bspritRootX) / 2);
+        const my = Math.round((bspritTipY + bspritRootY) / 2);
+        const foreLowerTopY = mastData[0]?.segments[0]?.yTop ?? (foreTopY + 200);
+        const innerClewX = bspritRootX + bspritSpan * 0.52;
+        const innerClewY = weatherDeckY - 90;
+        drawTriangularSail(
+            mx, my,
+            foreTopX, foreLowerTopY + 25,
+            innerClewX, innerClewY,
+            sailColor
+        );
     } else if (state.bowspritType === "squareSpritsail") {
         const sx = Math.round(bspritRootX + (bspritTipX-bspritRootX)*0.65);
         const sy = Math.round(bspritRootY + (bspritTipY-bspritRootY)*0.65);
@@ -523,9 +605,13 @@ function drawMastsAndSails(geo) {
     // ----- DRAW STAYSAILS -----
     if (staysailsData && staysailsData.length > 0) {
         for (const ss of staysailsData) {
-            const key = ss.type;
-            if (state.rig.staysails[key] === true) {
-                drawJib(ss.footX, ss.footY, ss.headX, ss.headY, ss.depth);
+            if (state.rig.staysails[ss.type] === true) {
+                drawTriangularSail(
+                    ss.tackX, ss.tackY,
+                    ss.headX, ss.headY,
+                    ss.clewX, ss.clewY,
+                    sailColor
+                );
             }
         }
     }

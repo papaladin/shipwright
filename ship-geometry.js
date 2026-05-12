@@ -307,43 +307,52 @@ function buildShipGeometry() {
     const bowSheer = Math.min(preset.bowSheer, hullHeight * 0.12);
     const sternSheer = Math.min(preset.sternSheer, hullHeight * 0.22);
 
-    // staysails (unchanged)
+    // staysails – sized for readability: tack/clew kept well above the deck,
+    // head at ~60 % of the lower-mast height so sails don't swamp the square sails.
     const staysailsData = [];
-    const lowerTop = (m) => m.segments[0]?.yTop;
+    const lowerTop   = (m) => m.segments[0]?.yTop;
     const topmastTop = (m) => m.segments.length > 1 ? m.segments[1].yTop : lowerTop(m) - 50;
+
+    // Point at `frac` of the way up a mast's lower section (0 = deck, 1 = crosstrees).
+    const lowerMastY = (m, frac) => weatherDeckY - (weatherDeckY - lowerTop(m)) * frac;
 
     if (mastData.length >= 2) {
         if (canHaveMainStaysail()) {
+            // Tack 18 % up foremast, head 60 % up mainmast, clew 14 % up mainmast.
             staysailsData.push({
                 type: "mainStaysail",
-                footX: mastData[0].x, footY: weatherDeckY,
-                headX: mastData[1].x, headY: lowerTop(mastData[1]),
-                depth: (lowerTop(mastData[1]) - weatherDeckY) * 0.25
+                tackX: mastData[0].x,       tackY: lowerMastY(mastData[0], 0.18),
+                headX: mastData[1].x,       headY: lowerMastY(mastData[1], 0.60),
+                clewX: mastData[1].x + 12,  clewY: lowerMastY(mastData[1], 0.14)
             });
         }
         if (canHaveMainTopmastStaysail()) {
+            // Lives aloft: tack just below foremast crosstrees,
+            // head 65 % up mainmast topmast section, clew just below mainmast crosstrees.
+            const mainTopmastH = lowerTop(mastData[1]) - topmastTop(mastData[1]);
             staysailsData.push({
                 type: "mainTopmastStaysail",
-                footX: mastData[0].x, footY: lowerTop(mastData[0]),
-                headX: mastData[1].x, headY: topmastTop(mastData[1]),
-                depth: (topmastTop(mastData[1]) - lowerTop(mastData[0])) * 0.25
+                tackX: mastData[0].x,       tackY: lowerTop(mastData[0]) + 18,
+                headX: mastData[1].x,       headY: lowerTop(mastData[1]) - mainTopmastH * 0.65,
+                clewX: mastData[1].x + 12,  clewY: lowerTop(mastData[1]) + 28
             });
         }
         if (mastData.length === 3) {
             if (canHaveMizzenStaysail()) {
                 staysailsData.push({
                     type: "mizzenStaysail",
-                    footX: mastData[1].x, footY: weatherDeckY,
-                    headX: mastData[2].x, headY: lowerTop(mastData[2]),
-                    depth: (lowerTop(mastData[2]) - weatherDeckY) * 0.25
+                    tackX: mastData[1].x,       tackY: lowerMastY(mastData[1], 0.18),
+                    headX: mastData[2].x,       headY: lowerMastY(mastData[2], 0.60),
+                    clewX: mastData[2].x + 12,  clewY: lowerMastY(mastData[2], 0.14)
                 });
             }
             if (canHaveMizzenTopmastStaysail()) {
+                const mizzTopmastH = lowerTop(mastData[2]) - topmastTop(mastData[2]);
                 staysailsData.push({
                     type: "mizzenTopmastStaysail",
-                    footX: mastData[1].x, footY: lowerTop(mastData[1]),
-                    headX: mastData[2].x, headY: topmastTop(mastData[2]),
-                    depth: (topmastTop(mastData[2]) - lowerTop(mastData[1])) * 0.25
+                    tackX: mastData[1].x,       tackY: lowerTop(mastData[1]) + 18,
+                    headX: mastData[2].x,       headY: lowerTop(mastData[2]) - mizzTopmastH * 0.65,
+                    clewX: mastData[2].x + 12,  clewY: lowerTop(mastData[2]) + 28
                 });
             }
         }
