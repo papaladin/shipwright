@@ -531,17 +531,59 @@ function drawMastsAndSails(geo) {
             const mastH = mast.totalHeight;
             const lowerTop = mast.segments.find(s => s.name === "lower")?.yTop || (weatherDeckY - mastH*0.55);
             if (state.masts[idx].gaff.hasGaff) {
-                const throatY = lowerTop + 12;
-                const boomY = weatherDeckY - mastH * 0.22;
+
+                // ---- Key coordinates ----
+                const throatY    = lowerTop + 12;                             // gaff/mast junction (top)
+                const boomY      = weatherDeckY - mastH * 0.22;               // boom/mast junction (bottom)
+                const boomLength = Math.min(geo.hullLength * 0.22, mastH * 0.72);
+                const boomEndX   = mastX + boomLength;
+                const boomEndY   = boomY - boomLength * 0.04;                 // slight upward angle on boom
                 const peakLength = mastH * 0.42;
-                const peakX = mastX + peakLength;
-                const peakY = throatY - peakLength * 0.72;
-                onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX, y2: peakY, stroke: "#7a5330", "stroke-width": "5" }));
-                onto("riggingLayer", el("line", { x1: mastX, y1: boomY, x2: mastX+Math.min(240, mastH*0.75), y2: boomY, stroke: "#7a5330", "stroke-width": "5" }));
-                onto("sailLayer", el("polygon", {
-                    points: `${mastX},${throatY} ${peakX},${peakY} ${mastX+Math.min(240, mastH*0.75)},${boomY} ${mastX},${boomY}`,
-                    fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5"
-                }));
+                const peakX      = mastX + peakLength;
+                const peakY      = throatY - peakLength * 0.38;               // flatter gaff (~22° vs old 36°)
+
+                // ---- Spars ----
+                onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX,    y2: peakY,    stroke: "#7a5330", "stroke-width": "5" }));
+                onto("riggingLayer", el("line", { x1: mastX, y1: boomY,   x2: boomEndX, y2: boomEndY, stroke: "#7a5330", "stroke-width": "5" }));
+
+                // ---- Curved sail body ----
+                // Leech (peak → clew): free edge, bellies aft (+X)
+                const leechLen   = Math.hypot(boomEndX - peakX, boomEndY - peakY);
+                const leechCtrlX = (peakX + boomEndX) / 2 + leechLen * 0.14;
+                const leechCtrlY = (peakY + boomEndY) / 2;
+                // Foot (clew → tack): slight downward belly below the boom
+                const footLen    = Math.hypot(mastX - boomEndX, boomY - boomEndY);
+                const footCtrlX  = (boomEndX + mastX) / 2;
+                const footCtrlY  = (boomEndY + boomY) / 2 + footLen * 0.06;
+
+                // Luff and gaff edges follow the spars, so they stay as straight L commands
+                const d = `M ${mastX},${throatY} ` +
+                          `L ${peakX},${peakY} ` +
+                          `Q ${leechCtrlX},${leechCtrlY} ${boomEndX},${boomEndY} ` +
+                          `Q ${footCtrlX},${footCtrlY} ${mastX},${boomY} Z`;
+
+                onto("sailLayer", el("path", { d, fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
+
+                // ---- Panel seam lines (4 horizontal cloth seams) ----
+                function quadPt(ax, ay, cx, cy, bx, by, t) {
+                    const u = 1 - t;
+                    return { x: u*u*ax + 2*u*t*cx + t*t*bx,
+                             y: u*u*ay + 2*u*t*cy + t*t*by };
+                }
+                for (let i = 1; i <= 4; i++) {
+                    const t = i / 5;
+                    // Luff is straight along the mast
+                    const lx = mastX;
+                    const ly = throatY + (boomY - throatY) * t;
+                    // Corresponding point on the leech curve
+                    const rp = quadPt(peakX, peakY, leechCtrlX, leechCtrlY, boomEndX, boomEndY, t);
+                    const smx = (lx + rp.x) / 2 + 5;
+                    const smy = (ly + rp.y) / 2 + 4;
+                    onto("sailLayer", el("path", {
+                        d: `M ${lx},${ly} Q ${smx},${smy} ${rp.x},${rp.y}`,
+                        fill: "none", stroke: "#c8a87a", "stroke-width": "0.8", opacity: "0.45"
+                    }));
+                }
             }
             if (state.masts[idx].gaff.hasSquareTopsail) {
                 const tsW = 155, tsH = 100;
