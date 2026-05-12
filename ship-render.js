@@ -31,18 +31,15 @@ function curvedSailPath(mastX, yardY, sailWidth, sailHeight, tilt = 0) {
     const rightX  = mastX + hw;
     const bottomY = yardY + sailHeight;
 
-    // Tilt offsets
     const topLeftY    = yardY - tilt;
     const topRightY   = yardY + tilt;
     const bottomLeftY = bottomY - tilt;
     const bottomRightY = bottomY + tilt;
 
-    // Top edge curve 
     const topMidY   = (topLeftY + topRightY) / 2;
-    const topBelly  = sailHeight * 0.05;
+    const topBelly  = sailHeight * -0.05;
     const topCtrlY  = topMidY + topBelly;
 
-    // Bottom edge curve (positive belly = wind fill)
     const bottomMidY   = (bottomLeftY + bottomRightY) / 2;
     const bottomBelly  = sailHeight * 0.10;
     const bottomCtrlY  = bottomMidY + bottomBelly;
@@ -91,32 +88,26 @@ function drawJib(x0, y0, x1, y1, depth) {
 // =====================================================
 function drawStandingRigging(geo) {
     const { mastData, weatherDeckY, hullLength, bspritTipX, bspritTipY, sternX } = geo;
-    const lowerShroudCount = 4;          // shrouds per side on lower mast
-    const topmastShroudCount = 3;        // shrouds per side on topmast
-    const ratlineSpacing = 15;
+    const lowerShroudCount = 4;
+    const topmastShroudCount = 3;
     const stayStroke = "#5a3e2b";
     const shroudStroke = "#6b5a42";
     const ratlineStroke = "#5a4a3a";
     const backstayStroke = "#6b5a42";
 
-    // Helper to find segment tops
     function segmentTop(mast, name) {
         const seg = mast.segments.find(s => s.name === name);
         return seg ? seg.yTop : null;
     }
 
-    // For each mast, determine highest usable head for stays and backstays
     const mastHeads = mastData.map(mast => {
         let headY = segmentTop(mast, "lower");
-        let headName = "lower";
         if (segmentTop(mast, "topgallant") !== null) {
             headY = segmentTop(mast, "topgallant");
-            headName = "topgallant";
         } else if (segmentTop(mast, "topmast") !== null) {
             headY = segmentTop(mast, "topmast");
-            headName = "topmast";
         }
-        return { y: headY, name: headName };
+        return { y: headY };
     });
 
     // ----- STAYS -----
@@ -127,7 +118,6 @@ function drawStandingRigging(geo) {
             stroke: stayStroke, "stroke-width": "2.5", opacity: "0.9"
         }));
     }
-
     if (mastData.length >= 2) {
         onto("riggingLayer", el("line", {
             x1: mastData[0].x, y1: mastHeads[0].y,
@@ -135,7 +125,6 @@ function drawStandingRigging(geo) {
             stroke: stayStroke, "stroke-width": "2.5", opacity: "0.9"
         }));
     }
-
     if (mastData.length >= 3) {
         onto("riggingLayer", el("line", {
             x1: mastData[1].x, y1: mastHeads[1].y,
@@ -144,35 +133,32 @@ function drawStandingRigging(geo) {
         }));
     }
 
-    // ----- SHROUDS AND RATLINES (for each mast) -----
+    // ----- SHROUDS AND RATLINES -----
     for (let i = 0; i < mastData.length; i++) {
         const mast = mastData[i];
         const xMast = mast.x;
         const lowerHeadY = segmentTop(mast, "lower");
         const topmastHeadY = segmentTop(mast, "topmast");
 
-        // Lower shrouds
         const lowerBaseY = weatherDeckY + 8;
-        const lowerSpread = hullLength * 0.065;
+        const lowerSpread = hullLength * LOWER_SHROUD_SPREAD_RATIO;
         for (let s = 0; s < lowerShroudCount; s++) {
             const t = s / (lowerShroudCount - 1);
             const lx = xMast - lowerSpread * (0.5 + t * 0.7);
             const rx = xMast + lowerSpread * (0.5 + t * 0.7);
             onto("riggingLayer", el("line", {
-                x1: lx, y1: lowerBaseY,
-                x2: xMast, y2: lowerHeadY,
+                x1: lx, y1: lowerBaseY, x2: xMast, y2: lowerHeadY,
                 stroke: shroudStroke, "stroke-width": "1.6", opacity: "0.8"
             }));
             onto("riggingLayer", el("line", {
-                x1: rx, y1: lowerBaseY,
-                x2: xMast, y2: lowerHeadY,
+                x1: rx, y1: lowerBaseY, x2: xMast, y2: lowerHeadY,
                 stroke: shroudStroke, "stroke-width": "1.6", opacity: "0.8"
             }));
         }
 
         // Platform only if a topmast exists
         if (topmastHeadY !== null) {
-            const platformHalfWidth = hullLength * 0.04;
+            const platformHalfWidth = hullLength * PLATFORM_HALF_WIDTH_RATIO;
             const platformY = lowerHeadY;
             onto("riggingLayer", el("line", {
                 x1: xMast - platformHalfWidth, y1: platformY,
@@ -186,13 +172,12 @@ function drawStandingRigging(geo) {
         // Lower ratlines
         const lowerLeftOuter  = xMast - lowerSpread * 1.2;
         const lowerRightOuter = xMast + lowerSpread * 1.2;
-        for (let yy = lowerBaseY + 10; yy < lowerHeadY - 6; yy += ratlineSpacing) {
+        for (let yy = lowerBaseY + 10; yy < lowerHeadY - 6; yy += RATLINE_SPACING) {
             const t = (yy - lowerBaseY) / (lowerHeadY - lowerBaseY);
             const lx = lowerLeftOuter + (xMast - lowerLeftOuter) * t;
             const rx = lowerRightOuter + (xMast - lowerRightOuter) * t;
             onto("riggingLayer", el("line", {
-                x1: lx, y1: yy,
-                x2: rx, y2: yy,
+                x1: lx, y1: yy, x2: rx, y2: yy,
                 stroke: ratlineStroke, "stroke-width": "1.2", opacity: "0.7"
             }));
         }
@@ -200,33 +185,29 @@ function drawStandingRigging(geo) {
         // Topmast shrouds
         if (topmastHeadY !== null && topmastHeadY !== lowerHeadY) {
             const topBaseY = lowerHeadY;
-            const topSpread = hullLength * 0.04;
+            const topSpread = hullLength * TOPMAST_SHROUD_SPREAD_RATIO;
             for (let s = 0; s < topmastShroudCount; s++) {
                 const t = s / (topmastShroudCount - 1);
                 const lx = xMast - topSpread * (0.5 + t * 0.8);
                 const rx = xMast + topSpread * (0.5 + t * 0.8);
                 onto("riggingLayer", el("line", {
-                    x1: lx, y1: topBaseY,
-                    x2: xMast, y2: topmastHeadY,
+                    x1: lx, y1: topBaseY, x2: xMast, y2: topmastHeadY,
                     stroke: shroudStroke, "stroke-width": "1.4", opacity: "0.8"
                 }));
                 onto("riggingLayer", el("line", {
-                    x1: rx, y1: topBaseY,
-                    x2: xMast, y2: topmastHeadY,
+                    x1: rx, y1: topBaseY, x2: xMast, y2: topmastHeadY,
                     stroke: shroudStroke, "stroke-width": "1.4", opacity: "0.8"
                 }));
             }
 
-            // Topmast ratlines
             const topLeftOuter  = xMast - topSpread * 1.3;
             const topRightOuter = xMast + topSpread * 1.3;
-            for (let yy = topBaseY + 8; yy < topmastHeadY - 6; yy += ratlineSpacing) {
+            for (let yy = topBaseY + 8; yy < topmastHeadY - 6; yy += RATLINE_SPACING) {
                 const t = (yy - topBaseY) / (topmastHeadY - topBaseY);
                 const lx = topLeftOuter + (xMast - topLeftOuter) * t;
                 const rx = topRightOuter + (xMast - topRightOuter) * t;
                 onto("riggingLayer", el("line", {
-                    x1: lx, y1: yy,
-                    x2: rx, y2: yy,
+                    x1: lx, y1: yy, x2: rx, y2: yy,
                     stroke: ratlineStroke, "stroke-width": "1.2", opacity: "0.7"
                 }));
             }
@@ -234,7 +215,8 @@ function drawStandingRigging(geo) {
 
         // Backstay
         const backstayHeadY = mastHeads[i].y;
-        const sternXPoint = sternX - (i === 0 ? 160 : i === 1 ? 100 : 50);
+        const offset = BACKSTAY_OFFSETS[i] || 100;
+        const sternXPoint = sternX - offset;
         onto("riggingLayer", el("line", {
             x1: xMast, y1: backstayHeadY,
             x2: sternXPoint, y2: weatherDeckY - 10,
@@ -408,20 +390,18 @@ function drawMastsAndSails(geo) {
         const sx = Math.round(bspritRootX + (bspritTipX-bspritRootX)*0.65);
         const sy = Math.round(bspritRootY + (bspritTipY-bspritRootY)*0.65);
         const spritW = 100, spritH = 85;
-        const tilt = spritH * 0.15;   // match other sails
+        const tilt = spritH * 0.15;
         const hw = spritW / 2;
         const leftX = sx - hw;
         const rightX = sx + hw;
         const topLeftY = sy - tilt;
         const topRightY = sy + tilt;
 
-        // Tilted yard
         onto("riggingLayer", el("line", {
             x1: leftX - 10, y1: topLeftY,
             x2: rightX + 10, y2: topRightY,
             stroke: "#7a5330", "stroke-width": "4"
         }));
-        // Tilted sail
         onto("sailLayer", el("path", {
             d: curvedSailPath(sx, sy, spritW, spritH, tilt),
             fill: sailColor,
@@ -436,7 +416,6 @@ function drawMastsAndSails(geo) {
         const mastX = mast.x;
         const rigType = mast.rigType;
 
-        // Mast segments
         for (const seg of mast.segments) {
             onto("mastLayer", el("line", { x1: mastX, y1: seg.yBottom, x2: mastX, y2: seg.yTop, stroke: "#6b4a28", "stroke-width": seg.width, "stroke-linecap": "round" }));
         }
@@ -445,7 +424,7 @@ function drawMastsAndSails(geo) {
         // Square rig
         if (rigType === "square") {
             for (const yard of mast.yards) {
-                const tilt = yard.height * 0.15;
+                const tilt = yard.height * 0.08;
                 const hw = yard.width / 2;
                 const leftX = mastX - hw;
                 const rightX = mastX + hw;
@@ -488,7 +467,7 @@ function drawMastsAndSails(geo) {
                     || (weatherDeckY - mastH*0.85);
                 const tsY = topmastTop + 35;
                 if (tsY > mast.mastTopY + 8) {
-                    const tilt = tsH * 0.15;
+                    const tilt = tsH * 0.08;
                     const hw = tsW / 2;
                     const leftX = mastX - hw;
                     const rightX = mastX + hw;
@@ -553,22 +532,27 @@ function drawMastsAndSails(geo) {
 }
 
 function drawShip() {
-    clearSVG();
-    getDefs();
-    addLayer("waterLayer");
-    addLayer("hullLayer");
-    addLayer("deckLayer");
-    addLayer("armamentLayer");
-    addLayer("mastLayer");
-    addLayer("riggingLayer");
-    addLayer("sailLayer");
-    addLayer("detailLayer");
+    try {
+        clearSVG();
+        getDefs();
+        addLayer("waterLayer");
+        addLayer("hullLayer");
+        addLayer("deckLayer");
+        addLayer("armamentLayer");
+        addLayer("mastLayer");
+        addLayer("riggingLayer");
+        addLayer("sailLayer");
+        addLayer("detailLayer");
 
-    const geo = buildShipGeometry();
-    drawWater(geo);
-    drawHull(geo);
-    drawDeckStructures(geo);
-    drawGunPorts(geo);
-    drawCabinsAndGallery(geo);
-    drawMastsAndSails(geo);
+        const geo = buildShipGeometry();
+        drawWater(geo);
+        drawHull(geo);
+        drawDeckStructures(geo);
+        drawGunPorts(geo);
+        drawCabinsAndGallery(geo);
+        drawMastsAndSails(geo);
+    } catch (err) {
+        console.error("drawShip() failed:", err);
+        // Optionally show a user‑friendly message on the canvas
+    }
 }

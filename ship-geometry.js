@@ -12,7 +12,7 @@ function buildSquareMast(totalHeight, sails, weatherDeckY, hullLength, hullHeigh
 
     const mastTopY = weatherDeckY - totalHeight;
 
-    // ---- Mast segments (unchanged) ----
+    // ---- Mast segments ----
     let segDefs;
     if (sailCount === 0) {
         segDefs = [
@@ -70,13 +70,12 @@ function buildSquareMast(totalHeight, sails, weatherDeckY, hullLength, hullHeigh
             return { name, width, height: width / aspect };
         });
 
-        const minGap = Math.max(12, hullHeight * 0.04);
+        const minGap = Math.max(8, hullHeight * 0.04);
         const topClearance = Math.max(14, hullHeight * 0.06);
 
-        // ----- Deck clearance (20% of hull height + belly allowance) -----
-        const baseFootClearance = hullHeight * 0.20;           // desired distance from deck to bottom edge (straight)
-        const courseBelly = sailData[0].height * 0.10;        // extra downward bulge of the course sail
-        const effectiveFootClearance = baseFootClearance + courseBelly; // distance from deck to lowest point of course
+        const baseFootClearance = hullHeight * 0.20;
+        const courseBelly = sailData[0].height * 0.10;
+        const effectiveFootClearance = baseFootClearance + courseBelly;
 
         const totalSailHeights = sailData.reduce((sum, s) => sum + s.height, 0);
         const totalGaps = (sailCount - 1) * minGap;
@@ -84,17 +83,15 @@ function buildSquareMast(totalHeight, sails, weatherDeckY, hullLength, hullHeigh
 
         const availableFromDeck = weatherDeckY - effectiveFootClearance - mastTopY - topClearance;
 
-        let startFootY;   // top of course (where the yard sits) – we'll place the course sail's yard below this
+        let startFootY;
         let gaps;
 
         if (requiredStack <= availableFromDeck) {
-            // Stack fits comfortably – place course foot as low as allowed, spread extra as larger gaps
             startFootY = weatherDeckY - effectiveFootClearance;
             const slack = availableFromDeck - requiredStack;
             const extraPerGap = sailCount > 1 ? slack / (sailCount - 1) : 0;
             gaps = sailData.map((_, i) => (i < sailCount - 1) ? minGap + extraPerGap : 0);
         } else {
-            // Stack is too tall – keep minimum gaps, raise the whole stack so top yard fits under masthead
             startFootY = weatherDeckY - effectiveFootClearance;
             const actualTop = startFootY - requiredStack;
             if (actualTop < mastTopY + topClearance) {
@@ -103,8 +100,7 @@ function buildSquareMast(totalHeight, sails, weatherDeckY, hullLength, hullHeigh
             gaps = sailData.map((_, i) => (i < sailCount - 1) ? minGap : 0);
         }
 
-        // Build yards from the top of the course down (or rather we build from foot upward)
-        let footY = startFootY;   // y‑coordinate of the bottom of the course (i.e., the foot)
+        let footY = startFootY;
         for (let i = 0; i < sailData.length; i++) {
             const s = sailData[i];
             const yardY = footY - s.height;
@@ -136,7 +132,6 @@ function buildGaffMast(totalHeight, gaffConf, weatherDeckY, hullLength) {
             { name: "topmast", yTop: weatherDeckY - lowerH - topmastH, yBottom: weatherDeckY - lowerH, width: 9 * mastScale }
         ];
     } else {
-        // single segment (lower only)
         segments = [
             { name: "lower", yTop: mastTopY, yBottom: weatherDeckY, width: 12 * mastScale }
         ];
@@ -233,8 +228,8 @@ function buildShipGeometry() {
             else if (cnt === 4) sailFactor = 1.15;
             else sailFactor = 1.00; // 2 or 3
         } else if (conf.type === "gaff") {
-            sailFactor = (conf.gaff.hasGaff && conf.gaff.hasSquareTopsail) ? 1.00 :
-                         (conf.gaff.hasGaff ? 0.70 : 0.70);
+            // fixed redundant ternary
+            sailFactor = (conf.gaff.hasGaff && conf.gaff.hasSquareTopsail) ? 1.00 : 0.70;
         } else { // lateen
             sailFactor = 1.00;
         }

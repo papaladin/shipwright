@@ -20,9 +20,13 @@ function el(tag, attrs) {
 }
 
 function onto(layerId, node) {
-    document.getElementById("shipSvg")
-        .querySelector(`#${layerId}`)
-        ?.appendChild(node);
+    const target = document.getElementById("shipSvg")
+        ?.querySelector(`#${layerId}`);
+    if (!target) {
+        console.warn(`Layer '${layerId}' not found – element not appended.`);
+        return;
+    }
+    target.appendChild(node);
 }
 
 function darken(hex, amount) {
@@ -34,7 +38,7 @@ function darken(hex, amount) {
 }
 
 // =====================================================
-// STEMMER (UI helper – kept here but does not contain ship rules)
+// STEMMER (UI helper)
 // =====================================================
 function createStepper(containerId, min, max, initialValue, onChange) {
     const container = document.getElementById(containerId);
@@ -134,11 +138,13 @@ const RIG_CONSTANTS = {
 };
 
 // =====================================================
-// ESTIMATED BEAM (unused currently)
+// RIGGING VISUAL CONSTANTS (extracted magic numbers)
 // =====================================================
-function estimateBeam(hullLength) {
-    return hullLength * 0.24;
-}
+const LOWER_SHROUD_SPREAD_RATIO = 0.065;
+const TOPMAST_SHROUD_SPREAD_RATIO = 0.04;
+const RATLINE_SPACING = 15;
+const PLATFORM_HALF_WIDTH_RATIO = 0.04;
+const BACKSTAY_OFFSETS = [160, 100, 50];   // per mast index (fore, main, mizzen)
 
 // =====================================================
 // RIG POWER (used for mast height scaling)
