@@ -249,6 +249,103 @@ function rebuildStaysailsUI() {
 }
 
 // =====================================================
+// FLAGS UI
+// =====================================================
+function rebuildFlagsUI() {
+    const panel = document.getElementById("flagsPanel");
+    if (!panel) return;
+    panel.innerHTML = '';
+
+    const positions = ['fore', 'main', 'mizzen', 'stern'];
+    const positionNames = { fore: 'Foremast', main: 'Mainmast', mizzen: 'Mizzen', stern: 'Stern' };
+
+    positions.forEach(pos => {
+        const flagState = state.flags[pos];
+        const container = document.createElement('div');
+        container.style.marginBottom = '8px';
+        container.style.padding = '6px';
+        container.style.background = 'rgba(255,255,240,0.5)';
+        container.style.borderRadius = '8px';
+
+        // ---- Enable checkbox ----
+        const enableLabel = document.createElement('label');
+        const enableCb = document.createElement('input');
+        enableCb.type = 'checkbox';
+        enableCb.checked = flagState.enabled;
+        enableCb.addEventListener('change', () => {
+            flagState.enabled = enableCb.checked;
+            rebuildFlagsUI();   // show/hide sub-controls
+            updateAndDraw();
+        });
+        enableLabel.appendChild(enableCb);
+        enableLabel.appendChild(document.createTextNode(' ' + positionNames[pos]));
+        container.appendChild(enableLabel);
+
+        if (!flagState.enabled) {
+            panel.appendChild(container);
+            return; // skip the rest for this position
+        }
+
+        // ---- Design dropdown ----
+        const designRow = document.createElement('div');
+        designRow.style.margin = '4px 0';
+        const designSelect = document.createElement('select');
+        Object.entries(FLAG_DESIGNS).forEach(([key, def]) => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = def.label;
+            designSelect.appendChild(opt);
+        });
+        designSelect.value = flagState.design;
+        designSelect.addEventListener('change', () => {
+            const newDesign = FLAG_DESIGNS[designSelect.value];
+            flagState.design = designSelect.value;
+            // if preset, auto‑fill colours
+            if (newDesign.fixedColors && newDesign.fixedColors.length > 0) {
+                flagState.primary = newDesign.fixedColors[0] || '#000000';
+                flagState.secondary = newDesign.fixedColors[1] || '#FFFFFF';
+            }
+            rebuildFlagsUI();
+            updateAndDraw();
+        });
+        designRow.appendChild(designSelect);
+        container.appendChild(designRow);
+
+        const currentDesign = FLAG_DESIGNS[flagState.design];
+
+        // ---- Colour pickers (only if customisable) ----
+        if (currentDesign.colors >= 1 && !currentDesign.fixedColors) {
+            const colorRow = document.createElement('div');
+            colorRow.style.display = 'flex'; colorRow.style.gap = '8px'; colorRow.style.alignItems = 'center';
+            const primLabel = document.createElement('label');
+            primLabel.textContent = 'C1:';
+            const primInput = document.createElement('input');
+            primInput.type = 'color';
+            primInput.value = flagState.primary;
+            primInput.addEventListener('input', () => { flagState.primary = primInput.value; updateAndDraw(); });
+            primLabel.appendChild(primInput);
+            colorRow.appendChild(primLabel);
+
+            if (currentDesign.colors >= 2) {
+                const secLabel = document.createElement('label');
+                secLabel.textContent = 'C2:';
+                const secInput = document.createElement('input');
+                secInput.type = 'color';
+                secInput.value = flagState.secondary;
+                secInput.addEventListener('input', () => { flagState.secondary = secInput.value; updateAndDraw(); });
+                secLabel.appendChild(secInput);
+                colorRow.appendChild(secLabel);
+            }
+            container.appendChild(colorRow);
+        }
+
+        panel.appendChild(container);
+    });
+}
+
+
+
+// =====================================================
 // MAIN UPDATE CYCLE
 // =====================================================
 function updateAndDraw() {
@@ -257,6 +354,7 @@ function updateAndDraw() {
     rebuildGunPortsUI();
     rebuildMastRiggingUI();
     rebuildStaysailsUI();
+    rebuildFlagsUI();
     drawShip();
 }
 
@@ -310,4 +408,5 @@ initSteppers();
 rebuildGunPortsUI();
 rebuildMastRiggingUI();
 rebuildStaysailsUI();
+rebuildFlagsUI();   // <-- new
 updateAndDraw();

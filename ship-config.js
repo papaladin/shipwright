@@ -266,6 +266,59 @@ function canHaveMizzenTopmastStaysail() {
            (mastHasUsableTopmast(1) || mastHasUsableTopmast(2));
 }
 
+
+// =====================================================
+// FLAG DESIGNS
+// =====================================================
+const FLAG_DESIGNS = {
+    solid:         { pattern: 'solid',        colors: 1, label: 'Solid colour', fixedColors: null },
+    stripesH:      { pattern: 'stripesH',     colors: 2, label: 'Stripes (horizontal)', fixedColors: null },
+    stripesV:      { pattern: 'stripesV',     colors: 2, label: 'Stripes (vertical)',   fixedColors: null },
+    skull:         { pattern: 'emblem',       colors: 0, label: '☠ Jolly Roger',        fixedColors: ['#000000','#FFFFFF'],
+                     emblem: 'skull', emblemPrimary: '#000000', emblemSecondary: '#FFFFFF' },
+    crown:         { pattern: 'emblem',       colors: 0, label: '👑 Crown',               fixedColors: ['#8B0000','#FFD700'],
+                     emblem: 'crown', emblemPrimary: '#8B0000', emblemSecondary: '#FFD700' },
+    eagle:         { pattern: 'emblem',       colors: 0, label: '🦅 Eagle',               fixedColors: ['#FFD700','#1A1A1A'],
+                     emblem: 'eagle', emblemPrimary: '#FFD700', emblemSecondary: '#1A1A1A' },
+    france:        { pattern: 'stripesV',     colors: 0, label: '🇫🇷 France',             fixedColors: ['#002395','#FFFFFF','#ED2939'] },
+    uk:            { pattern: 'uk',           colors: 0, label: '🇬🇧 United Kingdom',      fixedColors: ['#012169','#FFFFFF','#C8102E'] },
+    netherlands:   { pattern: 'stripesH',     colors: 0, label: '🇳🇱 Netherlands',         fixedColors: ['#AE1C28','#FFFFFF','#21468B'] },
+    spain:         { pattern: 'stripesH',     colors: 0, label: '🇪🇸 Spain',               fixedColors: ['#AA151B','#F1BF00','#AA151B'] },
+    portugal:      { pattern: 'portugal',     colors: 0, label: '🇵🇹 Portugal',            fixedColors: ['#006600','#FF0000','#FFFF00'] }
+};
+
+// Flag emblem SVG paths (scaled to fit inside a flag rectangle)
+const FLAG_EMBLEMS = {
+    skull: {   // simplified skull & crossbones (white on black)
+        bg: '#000000',
+        fg: '#FFFFFF',
+        path: 'M10,2 C7,2 5,4 5,7 L5,9 L3,11 L3,13 L5,12 L5,17 L7,17 L7,12 L9,12 L9,17 L11,17 L11,12 L13,12 L13,17 L15,17 L15,12 L17,13 L17,11 L15,9 L15,7 C15,4 13,2 10,2 Z M10,4 C11.5,4 13,5.5 13,7 L13,8 L7,8 L7,7 C7,5.5 8.5,4 10,4 Z M8,10 L9,10 L9,11 L8,11 Z M11,10 L12,10 L12,11 L11,11 Z'
+    },
+    crown: {   // simple crown (gold on dark red)
+        bg: '#8B0000',
+        fg: '#FFD700',
+        path: 'M2,14 L2,8 L5,10 L8,5 L11,10 L14,8 L14,14 Z M4,12 L12,12 L12,10 L11,11 L8,7 L5,11 L4,10 Z'
+    },
+    eagle: {   // simplified eagle silhouette (black on gold)
+        bg: '#FFD700',
+        fg: '#1A1A1A',
+        path: 'M10,2 L12,4 L14,3 L15,5 L14,7 L16,8 L16,12 L15,14 L13,13 L12,15 L10,13 L8,15 L7,13 L5,14 L4,12 L4,8 L6,7 L5,5 L6,3 L8,4 Z'
+    }
+};
+
+// =====================================================
+// STATE – extend with flags
+// =====================================================
+// (add to the existing state object)
+state.flags = {
+    fore:   { enabled: false, design: 'solid', primary: '#FF0000', secondary: '#FFFFFF' },
+    main:   { enabled: false, design: 'solid', primary: '#FF0000', secondary: '#FFFFFF' },
+    mizzen: { enabled: false, design: 'solid', primary: '#FF0000', secondary: '#FFFFFF' },
+    stern:  { enabled: false, design: 'solid', primary: '#FF0000', secondary: '#FFFFFF' }
+};
+
+
+
 // =====================================================
 // CONSTRAINTS (all rules that make the ship realistic)
 // =====================================================

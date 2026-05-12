@@ -140,7 +140,7 @@ function drawTriangularSail(tackX, tackY, headX, headY, clewX, clewY, sailColor)
 }
 
 // =====================================================
-// STANDING RIGGING (stays, shrouds, ratlines, backstays)
+// STANDING RIGGING
 // =====================================================
 function drawStandingRigging(geo) {
     const { mastData, weatherDeckY, hullLength, bspritTipX, bspritTipY, sternX } = geo;
@@ -292,7 +292,6 @@ function getDeckEdgePoints(geo) {
 
     const points = [];
 
-    // Stern curve
     for (let t = 0; t <= 1; t += 0.05) {
         const u = 1 - t;
         const cx = sternX - hullLength * 0.15;
@@ -302,11 +301,9 @@ function getDeckEdgePoints(geo) {
         points.push({ x, y });
     }
 
-    // Flat deck
     points.push({ x: sternDeckEnd, y: weatherDeckY });
     points.push({ x: bowDeckStart, y: weatherDeckY });
 
-    // Bow curve
     for (let t = 0; t <= 1; t += 0.05) {
         const u = 1 - t;
         const cx = bowX + hullLength * 0.15;
@@ -326,7 +323,6 @@ function drawHullRailing(geo) {
     const postColor = "#3d2510";
     const postHeight = 12;
 
-    // Posts
     for (let i = 0; i < points.length; i += 4) {
         const pt = points[i];
         onto("hullLayer", el("line", {
@@ -337,7 +333,6 @@ function drawHullRailing(geo) {
         }));
     }
 
-    // Handrail
     const handrailPoints = points.map(p => `${p.x},${p.y - postHeight}`).join(' ');
     onto("hullLayer", el("polyline", {
         points: handrailPoints,
@@ -346,7 +341,6 @@ function drawHullRailing(geo) {
         "stroke-width": "3"
     }));
 
-    // Mid‑rail
     const midRailPoints = points.map(p => `${p.x},${p.y - postHeight / 2}`).join(' ');
     onto("hullLayer", el("polyline", {
         points: midRailPoints,
@@ -358,7 +352,7 @@ function drawHullRailing(geo) {
 }
 
 // =====================================================
-// WATER IMPROVEMENTS (static)
+// WATER IMPROVEMENTS
 // =====================================================
 function wavePath(yCenter, amplitude, frequency, phase, width, height) {
     let d = `M 0,${yCenter}`;
@@ -378,7 +372,6 @@ function drawWater(geo) {
     const height = CANVAS_HEIGHT;
     const waterTop = waterlineY;
 
-    // ---- 1. Water gradient ----
     const gradId = "waterGrad";
     let grad = document.getElementById(gradId);
     if (!grad) {
@@ -388,43 +381,30 @@ function drawWater(geo) {
         getDefs().appendChild(grad);
     }
 
-    // ---- 2. Base water rectangle ----
-    onto("waterLayer", el("rect", {
-        x: 0, y: waterTop,
-        width, height: height - waterTop,
-        fill: `url(#${gradId})`,
-        opacity: "0.9"
-    }));
+    onto("waterLayer", el("rect", { x: 0, y: waterTop, width, height: height - waterTop, fill: `url(#${gradId})`, opacity: "0.9" }));
 
-    // ---- 3. Static wave lines ----
     const waveStyles = [
-        { yOff: 6,  amp: 4,  freq: 0.03, phase: 0,         color: "#b3dff0", opacity: 0.4, width: 2.5 },
-        { yOff: 16, amp: 6,  freq: 0.05, phase: 2.1,       color: "#89c8e0", opacity: 0.35, width: 2 },
-        { yOff: 28, amp: 5,  freq: 0.04, phase: 4.5,       color: "#a0d4ea", opacity: 0.3, width: 2 },
-        { yOff: 40, amp: 7,  freq: 0.06, phase: 1.3,       color: "#6eb5d1", opacity: 0.25, width: 1.8 }
+        { yOff: 6, amp: 4, freq: 0.03, phase: 0, color: "#b3dff0", opacity: 0.4, width: 2.5 },
+        { yOff: 16, amp: 6, freq: 0.05, phase: 2.1, color: "#89c8e0", opacity: 0.35, width: 2 },
+        { yOff: 28, amp: 5, freq: 0.04, phase: 4.5, color: "#a0d4ea", opacity: 0.3, width: 2 },
+        { yOff: 40, amp: 7, freq: 0.06, phase: 1.3, color: "#6eb5d1", opacity: 0.25, width: 1.8 }
     ];
 
     waveStyles.forEach(ws => {
         const yCenter = waterTop + ws.yOff;
         onto("waterLayer", el("path", {
             d: wavePath(yCenter, ws.amp, ws.freq, ws.phase, width, height),
-            fill: "none",
-            stroke: ws.color,
-            "stroke-width": ws.width,
-            opacity: ws.opacity
+            fill: "none", stroke: ws.color, "stroke-width": ws.width, opacity: ws.opacity
         }));
     });
 
-    // ---- 4. Bow wake ----
     const bowWakeX = geo.bowX + 20;
     const bowWakeY = waterTop;
     onto("waterLayer", el("polygon", {
         points: `${bowWakeX},${bowWakeY} ${bowWakeX - 25},${bowWakeY + 8} ${bowWakeX + 10},${bowWakeY + 6} ${bowWakeX + 35},${bowWakeY + 12}`,
-        fill: "#ffffff",
-        opacity: "0.3"
+        fill: "#ffffff", opacity: "0.3"
     }));
 
-    // ---- 5. Hull reflection ----
     const hullPath = buildHullPath(geo);
     const waterClipId = "waterClip";
     let waterClip = document.getElementById(waterClipId);
@@ -434,20 +414,14 @@ function drawWater(geo) {
         getDefs().appendChild(waterClip);
     }
     onto("waterLayer", el("path", {
-        d: hullPath,
-        fill: `url(#${gradId})`,
-        opacity: "0.15",
+        d: hullPath, fill: `url(#${gradId})`, opacity: "0.15",
         transform: `translate(0, ${waterTop * 2}) scale(1, -1)`,
         "clip-path": `url(#${waterClipId})`
     }));
 
-    // ---- 6. Waterline highlight ----
     onto("waterLayer", el("path", {
         d: `M ${geo.bowX + 10},${waterTop} Q ${(geo.bowX + geo.sternX) / 2},${waterTop - 2} ${geo.sternX - 10},${waterTop}`,
-        fill: "none",
-        stroke: "#d4f0ff",
-        "stroke-width": "2",
-        opacity: "0.8"
+        fill: "none", stroke: "#d4f0ff", "stroke-width": "2", opacity: "0.8"
     }));
 }
 
@@ -473,7 +447,6 @@ function drawHull(geo) {
     const hullColor = state.appearance.hullColor;
     const hullPath = buildHullPath(geo);
 
-    // Copper bottom
     onto("hullLayer", el("path", { d: hullPath, fill: COPPER_COLOR, stroke: "none" }));
 
     const aboveWaterId = "aboveWaterClip";
@@ -495,7 +468,6 @@ function drawHull(geo) {
 
     const interiorGrp = el("g", { "clip-path": `url(#${clipId})` });
 
-    // Planks
     const plankClr = darken(hullColor, 22);
     const plankLight = lighten(hullColor, 20);
     for (let py = geo.weatherDeckY + 16; py < geo.keelY + 32; py += 20) {
@@ -503,7 +475,6 @@ function drawHull(geo) {
         interiorGrp.appendChild(el("line", { x1: 0, y1: py + 1.5, x2: 1500, y2: py + 1.5, stroke: plankLight, "stroke-width": "0.8", opacity: "0.35" }));
     }
 
-    // Wales
     const freeboard = geo.weatherDeckY - geo.waterlineY;
     const waleYs = [
         geo.weatherDeckY - freeboard * 0.22,
@@ -516,7 +487,6 @@ function drawHull(geo) {
         interiorGrp.appendChild(el("line", { x1: 0, y1: wy - 2, x2: 1500, y2: wy - 2, stroke: lighten(hullColor, 5), "stroke-width": "1", opacity: "0.5" }));
     });
 
-    // 3D shading
     const shadeId = "hullShadeGrad";
     let shadeGrad = document.getElementById(shadeId);
     if (!shadeGrad) {
@@ -528,14 +498,8 @@ function drawHull(geo) {
     interiorGrp.appendChild(el("rect", { x: 0, y: geo.weatherDeckY, width: CANVAS_WIDTH, height: geo.keelY - geo.weatherDeckY + 5, fill: `url(#${shadeId})`, opacity: "0.25" }));
 
     onto("hullLayer", interiorGrp);
-
-    // Hull outline
     onto("hullLayer", el("path", { d: hullPath, fill: "none", stroke: "#3d2510", "stroke-width": "3.5" }));
-
-    // Deck strip
     onto("hullLayer", el("rect", { x: geo.bowFairX - 8, y: geo.weatherDeckY, width: geo.sternFairX - geo.bowFairX + 18, height: 6, fill: darken(hullColor, 28), opacity: "0.55" }));
-
-    // Hull railing
     drawHullRailing(geo);
 }
 
@@ -684,50 +648,218 @@ function drawCabinsAndGallery(geo) {
 }
 
 // =====================================================
-// MASTS & SAILS (with corrected depth order)
+// FLAG DRAWING
+// =====================================================
+function drawFlappingFlag(cx, cy, flagWidth, flagHeight, primaryColor, secondaryColor, designKey, tiltDeg) {
+    // Only draw if enabled in state
+    const design = FLAG_DESIGNS[designKey] || FLAG_DESIGNS.solid;
+    const grp = el("g", { transform: `rotate(${tiltDeg}, ${cx}, ${cy})` });
+
+    const leftX = cx - 2;            // pole attachment
+    const rightX = cx + flagWidth;   // free end
+    const topY = cy - flagHeight / 2;
+    const bottomY = cy + flagHeight / 2;
+
+    // Wind flap: sinusoidal offset on top and bottom edges
+    const waveAmp = flagWidth * 0.08;
+    const freq = 2.5;
+    const steps = 8;
+    let topEdge = `M ${leftX},${topY}`;
+    let bottomEdge = `M ${leftX},${bottomY}`;
+    const topPts = [], bottomPts = [];
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const x = leftX + (rightX - leftX) * t;
+        const waveY = Math.sin(t * Math.PI * freq) * waveAmp;
+        topPts.push({ x, y: topY + waveY });
+        bottomPts.push({ x, y: bottomY + waveY });
+    }
+    // Build path string
+    let d = `M ${leftX},${topY} `;
+    for (let i = 1; i < topPts.length; i++) d += `L ${topPts[i].x},${topPts[i].y} `;
+    d += `L ${rightX},${bottomY} `;
+    for (let i = bottomPts.length - 2; i >= 0; i--) d += `L ${bottomPts[i].x},${bottomPts[i].y} `;
+    d += ' Z';
+
+    const flagPath = el("path", { d, fill: primaryColor, stroke: "#5a4a3a", "stroke-width": "0.8" });
+
+    // Apply pattern
+    if (design.pattern === 'solid') {
+        flagPath.setAttribute('fill', primaryColor);
+    } else if (design.pattern === 'stripesH') {
+        // We'll use a clipPath to cut stripes
+        const clipId = 'flagClip' + Math.random();
+        const clip = el("clipPath", { id: clipId });
+        clip.appendChild(el("path", { d }));
+        getDefs().appendChild(clip);
+        const stripeG = el("g", { "clip-path": `url(#${clipId})` });
+        const colors = [primaryColor, secondaryColor];
+        const stripeH = flagHeight / 3;
+        for (let s = 0; s < 3; s++) {
+            stripeG.appendChild(el("rect", {
+                x: leftX - 2, y: topY + s * stripeH,
+                width: flagWidth + 4, height: stripeH,
+                fill: colors[s % 2]
+            }));
+        }
+        grp.appendChild(stripeG);
+        grp.appendChild(el("path", { d, fill: "none", stroke: "#5a4a3a", "stroke-width": "0.8" }));
+        onto("flagLayer", grp);
+        return;
+    } else if (design.pattern === 'stripesV') {
+        const clipId = 'flagClip' + Math.random();
+        const clip = el("clipPath", { id: clipId });
+        clip.appendChild(el("path", { d }));
+        getDefs().appendChild(clip);
+        const stripeG = el("g", { "clip-path": `url(#${clipId})` });
+        const colors = design.fixedColors || [primaryColor, secondaryColor, primaryColor];
+        const stripeW = flagWidth / colors.length;
+        for (let s = 0; s < colors.length; s++) {
+            stripeG.appendChild(el("rect", {
+                x: leftX + s * stripeW, y: topY - 2,
+                width: stripeW, height: flagHeight + 4,
+                fill: colors[s]
+            }));
+        }
+        grp.appendChild(stripeG);
+        grp.appendChild(el("path", { d, fill: "none", stroke: "#5a4a3a", "stroke-width": "0.8" }));
+        onto("flagLayer", grp);
+        return;
+    } else if (design.pattern === 'emblem') {
+        // Background fill
+        flagPath.setAttribute('fill', design.emblemPrimary);
+        grp.appendChild(flagPath);
+        // Emblem symbol
+        const emb = FLAG_EMBLEMS[design.emblem];
+        if (emb) {
+            const emblemScale = Math.min(flagWidth, flagHeight) / 20;
+            const emblemG = el("g", { transform: `translate(${cx + flagWidth/2 - 10*emblemScale}, ${cy - 10*emblemScale}) scale(${emblemScale})` });
+            const emblemPath = el("path", { d: emb.path, fill: emb.fg, stroke: "none" });
+            emblemG.appendChild(emblemPath);
+            grp.appendChild(emblemG);
+        }
+    } else if (design.pattern === 'uk') {
+        // Simplified Union Jack: blue field, white/red crosses
+        flagPath.setAttribute('fill', design.fixedColors[0]);
+        grp.appendChild(flagPath);
+        const cxFlag = cx + flagWidth/2;
+        const cyFlag = cy;
+        // white diagonal cross
+        const diagW = 3;
+        onto("flagLayer", el("polygon", { points: `${cxFlag-flagWidth/2},${cyFlag-flagHeight/2} ${cxFlag+flagWidth/2},${cyFlag+flagHeight/2} ${cxFlag+flagWidth/2},${cyFlag+flagHeight/2-diagW} ${cxFlag-flagWidth/2},${cyFlag-flagHeight/2-diagW}`, fill: design.fixedColors[1] }));
+        onto("flagLayer", el("polygon", { points: `${cxFlag+flagWidth/2},${cyFlag-flagHeight/2} ${cxFlag-flagWidth/2},${cyFlag+flagHeight/2} ${cxFlag-flagWidth/2},${cyFlag+flagHeight/2-diagW} ${cxFlag+flagWidth/2},${cyFlag-flagHeight/2-diagW}`, fill: design.fixedColors[1] }));
+        // red thin cross
+        const thinW = 1;
+        onto("flagLayer", el("polygon", { points: `${cxFlag-flagWidth/2},${cyFlag-flagHeight/2} ${cxFlag+flagWidth/2},${cyFlag+flagHeight/2} ${cxFlag+flagWidth/2},${cyFlag+flagHeight/2-thinW} ${cxFlag-flagWidth/2},${cyFlag-flagHeight/2-thinW}`, fill: design.fixedColors[2] }));
+        onto("flagLayer", el("polygon", { points: `${cxFlag+flagWidth/2},${cyFlag-flagHeight/2} ${cxFlag-flagWidth/2},${cyFlag+flagHeight/2} ${cxFlag-flagWidth/2},${cyFlag+flagHeight/2-thinW} ${cxFlag+flagWidth/2},${cyFlag-flagHeight/2-thinW}`, fill: design.fixedColors[2] }));
+        // white cross
+        onto("flagLayer", el("rect", { x: cxFlag - flagWidth*0.4, y: cyFlag - flagHeight/2, width: flagWidth*0.8, height: flagHeight, fill: design.fixedColors[1], opacity: 0.4 }));
+        onto("flagLayer", el("rect", { x: cxFlag - flagWidth/2, y: cyFlag - flagHeight*0.4, width: flagWidth, height: flagHeight*0.8, fill: design.fixedColors[1], opacity: 0.4 }));
+        return;
+    } else if (design.pattern === 'portugal') {
+        // Simplified Portugal: green left third, red right two-thirds, small yellow emblem
+        const clipId = 'flagClip' + Math.random();
+        const clip = el("clipPath", { id: clipId });
+        clip.appendChild(el("path", { d }));
+        getDefs().appendChild(clip);
+        const stripeG = el("g", { "clip-path": `url(#${clipId})` });
+        stripeG.appendChild(el("rect", { x: leftX, y: topY, width: flagWidth * 0.4, height: flagHeight, fill: design.fixedColors[0] }));
+        stripeG.appendChild(el("rect", { x: leftX + flagWidth * 0.4, y: topY, width: flagWidth * 0.6, height: flagHeight, fill: design.fixedColors[1] }));
+        // small yellow circle
+        stripeG.appendChild(el("circle", { cx: leftX + flagWidth * 0.4, cy: cy, r: flagHeight * 0.2, fill: design.fixedColors[2] }));
+        grp.appendChild(stripeG);
+        grp.appendChild(el("path", { d, fill: "none", stroke: "#5a4a3a", "stroke-width": "0.8" }));
+        onto("flagLayer", grp);
+        return;
+    }
+
+    grp.appendChild(flagPath);
+    onto("flagLayer", grp);
+}
+
+function drawFlags(geo) {
+    const { mastData, sternX, quarterdeck, poopDeck, galleryTopY, galleryWidth } = geo;
+    const poleHeight = 16;
+
+    // Masthead flag sizes (pennant-like)
+    const mastFlagW = 35;
+    const mastFlagH = 20;
+    // Stern flag size (ensign-like)
+    const sternFlagW = 55;
+    const sternFlagH = 32;
+
+    const positions = [
+        { key: 'fore',   x: mastData[0]?.x,        y: mastData[0]?.mastTopY,        flagW: mastFlagW, flagH: mastFlagH, tilt: 4 },
+        { key: 'main',   x: mastData[1]?.x,        y: mastData[1]?.mastTopY,        flagW: mastFlagW, flagH: mastFlagH, tilt: 4 },
+        { key: 'mizzen', x: mastData[2]?.x,        y: mastData[2]?.mastTopY,        flagW: mastFlagW * 0.85, flagH: mastFlagH * 0.85, tilt: 3 },
+    ];
+
+    // Only draw mast flags that exist (mastData length check)
+    for (let i = 0; i < positions.length && i < mastData.length; i++) {
+        const pos = positions[i];
+        const flagState = state.flags[pos.key];
+        if (!flagState || !flagState.enabled) continue;
+        const poleTopX = pos.x;
+        const poleTopY = pos.y - 4;
+        // Draw small pole
+        onto("flagLayer", el("line", { x1: pos.x, y1: pos.y, x2: poleTopX, y2: poleTopY - poleHeight, stroke: "#3d2510", "stroke-width": "1.5" }));
+        // Draw flag hanging from pole top, slightly to the right (wind direction)
+        const flagCx = poleTopX - 2;
+        const flagCy = poleTopY - poleHeight + pos.flagH / 2;
+        drawFlappingFlag(flagCx, flagCy, pos.flagW, pos.flagH, flagState.primary, flagState.secondary, flagState.design, pos.tilt);
+    }
+
+    // Stern flag
+    const sternFlag = state.flags.stern;
+    if (sternFlag && sternFlag.enabled) {
+        let sternPoleX, sternPoleTopY;
+        if (poopDeck) {
+            // Use the flagpole we already drew in deckStructures
+            sternPoleX = poopDeck.x + poopDeck.width - 10;
+            sternPoleTopY = poopDeck.y - 30;
+        } else {
+            // Fallback: use stern gallery roof area
+            sternPoleX = sternX - galleryWidth / 2;
+            sternPoleTopY = (galleryTopY || geo.weatherDeckY - 50) - 20;
+        }
+        // Extend pole upward a bit for flag
+        onto("flagLayer", el("line", { x1: sternPoleX, y1: sternPoleTopY + poleHeight, x2: sternPoleX, y2: sternPoleTopY - poleHeight, stroke: "#3d2510", "stroke-width": "2" }));
+        const flagCx = sternPoleX - 2;
+        const flagCy = sternPoleTopY - poleHeight + sternFlagH / 2;
+        drawFlappingFlag(flagCx, flagCy, sternFlagW, sternFlagH, sternFlag.primary, sternFlag.secondary, sternFlag.design, -2);
+    }
+}
+
+// =====================================================
+// MASTS & SAILS (unchanged depth order)
 // =====================================================
 function drawMastsAndSails(geo) {
     const { mastData, weatherDeckY, keelY, bspritRootX, bspritRootY, bspritTipX, bspritTipY, staysailsData } = geo;
     const sailColor = state.appearance.sailColor;
     const mastBotY = keelY - 22;
 
-    // ── 1. Bowsprit spar (unchanged) ──
     if (state.bowspritType !== "none") {
         onto("mastLayer", el("line", { x1: bspritRootX, y1: bspritRootY, x2: bspritTipX, y2: bspritTipY, stroke: "#6f4a2c", "stroke-width": "10" }));
         onto("riggingLayer", el("line", { x1: bspritTipX, y1: bspritTipY, x2: bspritRootX+5, y2: weatherDeckY+18, stroke: "#7a6a52", "stroke-width": "1.5", opacity: "0.8" }));
     }
 
-    // ── 2. Mast bases (into the hull) – drawn FIRST, into mastBaseLayer ──
     for (const mast of mastData) {
-        onto("mastBaseLayer", el("line", {
-            x1: mast.x, y1: weatherDeckY,
-            x2: mast.x, y2: mastBotY,
-            stroke: "#5e3e1c", "stroke-width": "13"
-        }));
+        onto("mastBaseLayer", el("line", { x1: mast.x, y1: weatherDeckY, x2: mast.x, y2: mastBotY, stroke: "#5e3e1c", "stroke-width": "13" }));
     }
 
-    // ── 3. Masts from stern to bow: mizzen → main → fore ──
-    // We must draw segments and yards in mastLayer, and sails in sailLayer.
-    // For square rig, draw yards from top to bottom within each mast (so lower sail overlaps upper).
-    const mastOrder = [2, 1, 0].filter(i => i < mastData.length); // mizzen first, fore last
-    const drawnStaysailTypes = new Set();  // prevent drawing the same staysail twice
+    const mastOrder = [2, 1, 0].filter(i => i < mastData.length);
+    const drawnStaysailTypes = new Set();
 
     for (const idx of mastOrder) {
         const mast = mastData[idx];
         const mastX = mast.x;
         const rigType = mast.rigType;
 
-        // Mast segments (above deck)
         for (const seg of mast.segments) {
-            onto("mastLayer", el("line", {
-                x1: mastX, y1: seg.yBottom, x2: mastX, y2: seg.yTop,
-                stroke: "#6b4a28", "stroke-width": seg.width, "stroke-linecap": "round"
-            }));
+            onto("mastLayer", el("line", { x1: mastX, y1: seg.yBottom, x2: mastX, y2: seg.yTop, stroke: "#6b4a28", "stroke-width": seg.width, "stroke-linecap": "round" }));
         }
 
-        // Yard & sail drawing
         if (rigType === "square") {
-            // draw from top to bottom so course (lowest) overlaps upper sails
             for (let yi = mast.yards.length - 1; yi >= 0; yi--) {
                 const yard = mast.yards[yi];
                 const tilt = yard.height * 0.08;
@@ -736,18 +868,8 @@ function drawMastsAndSails(geo) {
                 const rightX = mastX + hw;
                 const topLeftY = yard.y - tilt;
                 const topRightY = yard.y + tilt;
-
-                onto("riggingLayer", el("line", {
-                    x1: leftX - 14, y1: topLeftY,
-                    x2: rightX + 14, y2: topRightY,
-                    stroke: "#7a5330", "stroke-width": "5"
-                }));
-                onto("sailLayer", el("path", {
-                    d: curvedSailPath(mastX, yard.y, yard.width, yard.height, tilt),
-                    fill: sailColor,
-                    stroke: "#b8915e",
-                    "stroke-width": "1.5"
-                }));
+                onto("riggingLayer", el("line", { x1: leftX - 14, y1: topLeftY, x2: rightX + 14, y2: topRightY, stroke: "#7a5330", "stroke-width": "5" }));
+                onto("sailLayer", el("path", { d: curvedSailPath(mastX, yard.y, yard.width, yard.height, tilt), fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
             }
         } else if (rigType === "gaff") {
             const mastH = mast.totalHeight;
@@ -761,8 +883,8 @@ function drawMastsAndSails(geo) {
                 const peakLength = mastH * 0.42;
                 const peakX      = mastX + peakLength;
                 const peakY      = throatY - peakLength * 0.38;
-                onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX,    y2: peakY,    stroke: "#7a5330", "stroke-width": "5" }));
-                onto("riggingLayer", el("line", { x1: mastX, y1: boomY,   x2: boomEndX, y2: boomEndY, stroke: "#7a5330", "stroke-width": "5" }));
+                onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX, y2: peakY, stroke: "#7a5330", "stroke-width": "5" }));
+                onto("riggingLayer", el("line", { x1: mastX, y1: boomY, x2: boomEndX, y2: boomEndY, stroke: "#7a5330", "stroke-width": "5" }));
                 const leechLen   = Math.hypot(boomEndX - peakX, boomEndY - peakY);
                 const leechCtrlX = (peakX + boomEndX) / 2 + leechLen * 0.14;
                 const leechCtrlY = (peakY + boomEndY) / 2;
@@ -827,10 +949,6 @@ function drawMastsAndSails(geo) {
             }
         }
 
-        // After each mast's sails, draw the staysails that belong to that mast's position
-        // For mizzen (idx=2): draw mizzenStaysail, mizzenTopmastStaysail
-        // For main (idx=1): draw mainStaysail, mainTopmastStaysail
-        // Fore (idx=0): none
         if (staysailsData && staysailsData.length > 0) {
             const targetTypes = [];
             if (idx === 2) targetTypes.push("mizzenStaysail", "mizzenTopmastStaysail");
@@ -846,7 +964,6 @@ function drawMastsAndSails(geo) {
         }
     }
 
-    // ── 4. Bowsprit sails (jib / spritsail) come LAST, in front of everything ──
     const foreTopY = mastData[0]?.mastTopY ?? weatherDeckY - 220;
     const foreTopX = mastData[0]?.x ?? (bspritRootX + 100);
     const bspritSpan  = foreTopX - bspritRootX;
@@ -877,7 +994,6 @@ function drawMastsAndSails(geo) {
         onto("sailLayer", el("path", { d: curvedSailPath(sx, sy, spritW, spritH, tilt), fill: sailColor, stroke: "#b18753", "stroke-width": "1.5" }));
     }
 
-    // ── 5. Standing rigging (stays, shrouds, backstays) – behind sails but after masts ──
     drawStandingRigging(geo);
 }
 
@@ -885,24 +1001,25 @@ function drawShip() {
     try {
         clearSVG();
         getDefs();
-        // Layer order (back to front):
-        addLayer("mastBaseLayer");   // mast stubs inside the hull (behind hull)
-        addLayer("hullLayer");       // hull, planks, wales, copper, railing
-        addLayer("deckLayer");       // deck structures, castles, details
-        addLayer("armamentLayer");   // gun ports
-        addLayer("mastLayer");       // mast segments (above deck)
-        addLayer("riggingLayer");    // shrouds, stays, ratlines, yards
-        addLayer("sailLayer");       // sails
-        addLayer("detailLayer");     // stern gallery, windows, lantern
-        addLayer("waterLayer");      // water on top of everything
+        addLayer("mastBaseLayer");
+        addLayer("hullLayer");
+        addLayer("deckLayer");
+        addLayer("armamentLayer");
+        addLayer("mastLayer");
+        addLayer("riggingLayer");
+        addLayer("sailLayer");
+        addLayer("detailLayer");
+        addLayer("flagLayer");        // new layer for flags
+        addLayer("waterLayer");
 
         const geo = buildShipGeometry();
-        drawWater(geo);              // water is added last, so it appears on top
+        drawWater(geo);
         drawHull(geo);
         drawDeckStructures(geo);
         drawGunPorts(geo);
         drawCabinsAndGallery(geo);
         drawMastsAndSails(geo);
+        drawFlags(geo);               // draw flags after all other elements
     } catch (err) {
         console.error("drawShip() failed:", err);
     }
