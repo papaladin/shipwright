@@ -23,7 +23,7 @@ function getDefs() {
 }
 
 // -------------------------------------------------------
-// Tiny colour helpers (only used for shading)
+// Tiny colour helpers
 // -------------------------------------------------------
 function lighten(hex, amount) {
     const clamp = n => Math.max(0, Math.min(255, n));
@@ -33,11 +33,10 @@ function lighten(hex, amount) {
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
-// Copper sheathing colour (below waterline)
 const COPPER_COLOR = "#b87333";
 
 // =====================================================
-// SAIL PATH HELPERS (shared between rig types)
+// SAIL PATH HELPERS
 // =====================================================
 function curvedSailPath(mastX, yardY, sailWidth, sailHeight, tilt = 0) {
     const hw = sailWidth / 2;
@@ -141,7 +140,7 @@ function drawTriangularSail(tackX, tackY, headX, headY, clewX, clewY, sailColor)
 }
 
 // =====================================================
-// STANDING RIGGING (stays, shrouds, ratlines, backstays)
+// STANDING RIGGING
 // =====================================================
 function drawStandingRigging(geo) {
     const { mastData, weatherDeckY, hullLength, bspritTipX, bspritTipY, sternX } = geo;
@@ -279,29 +278,182 @@ function drawStandingRigging(geo) {
 }
 
 // =====================================================
-// DRAWING FUNCTIONS
+// HULL RAILING HELPER
 // =====================================================
-function drawWater(geo) {
-    const { waterlineY } = geo;
-    onto("waterLayer", el("rect", {
-        x: 0, y: waterlineY,
-        width: CANVAS_WIDTH, height: CANVAS_HEIGHT - waterlineY,
-        fill: "#4a8faa", opacity: "0.35"
-    }));
-    for (let i = 0; i < 2; i++) {
-        const off = i * 8;
-        onto("waterLayer", el("path", {
-            d: `M 30,${waterlineY+off} Q 380,${waterlineY-3+off} 760,${waterlineY+5+off} T 1480,${waterlineY+off}`,
-            stroke: "#5d9bb3", "stroke-width": i === 0 ? "3" : "2",
-            fill: "none", opacity: i === 0 ? 0.8 : 0.55
+function getDeckEdgePoints(geo) {
+    const { sternX, bowX, weatherDeckY, bowSheer, sternSheer, hullLength } = geo;
+    const tumblehome = hullLength * 0.04;
+    const sternRiseCtrl = weatherDeckY - sternSheer * 1.2 - 5;
+    const bowRiseCtrl = weatherDeckY - bowSheer * 1.1 - 5;
+    const bowTipY = weatherDeckY - bowSheer + 15;
+
+    const sternDeckEnd = sternX - hullLength * 0.25;
+    const bowDeckStart = bowX + hullLength * 0.25 + tumblehome;
+
+    const points = [];
+
+    // Stern curve
+    for (let t = 0; t <= 1; t += 0.05) {
+        const u = 1 - t;
+        const cx = sternX - hullLength * 0.15;
+        const cy = sternRiseCtrl;
+        const x = u * u * sternX + 2 * u * t * cx + t * t * sternDeckEnd;
+        const y = u * u * weatherDeckY + 2 * u * t * cy + t * t * weatherDeckY;
+        points.push({ x, y });
+    }
+
+    // Flat deck
+    points.push({ x: sternDeckEnd, y: weatherDeckY });
+    points.push({ x: bowDeckStart, y: weatherDeckY });
+
+    // Bow curve
+    for (let t = 0; t <= 1; t += 0.05) {
+        const u = 1 - t;
+        const cx = bowX + hullLength * 0.15;
+        const cy = bowRiseCtrl;
+        const x = u * u * bowDeckStart + 2 * u * t * cx + t * t * bowX;
+        const y = u * u * weatherDeckY + 2 * u * t * cy + t * t * bowTipY;
+        points.push({ x, y });
+    }
+
+    return points;
+}
+
+function drawHullRailing(geo) {
+    const points = getDeckEdgePoints(geo);
+    if (points.length < 2) return;
+    const railColor = darken(state.appearance.hullColor, 25);
+    const postColor = "#3d2510";
+    const postHeight = 12;
+
+    // Posts
+    for (let i = 0; i < points.length; i += 4) {
+        const pt = points[i];
+        onto("hullLayer", el("line", {
+            x1: pt.x, y1: pt.y,
+            x2: pt.x, y2: pt.y - postHeight,
+            stroke: postColor,
+            "stroke-width": "1.5"
         }));
     }
-    onto("waterLayer", el("path", {
-        d: `M ${geo.bowX+80},${waterlineY-1} Q ${(geo.bowX+geo.sternX)/2},${waterlineY-3} ${geo.sternX-80},${waterlineY-1}`,
-        stroke: "#c2e0f0", "stroke-width": "2", fill: "none", opacity: "0.7"
+
+    // Handrail
+    const handrailPoints = points.map(p => `${p.x},${p.y - postHeight}`).join(' ');
+    onto("hullLayer", el("polyline", {
+        points: handrailPoints,
+        fill: "none",
+        stroke: railColor,
+        "stroke-width": "3"
+    }));
+
+    // Mid‑rail
+    const midRailPoints = points.map(p => `${p.x},${p.y - postHeight / 2}`).join(' ');
+    onto("hullLayer", el("polyline", {
+        points: midRailPoints,
+        fill: "none",
+        stroke: railColor,
+        "stroke-width": "1.5",
+        opacity: "0.7"
     }));
 }
 
+// =====================================================
+// WATER IMPROVEMENTS (static)
+// =====================================================
+function wavePath(yCenter, amplitude, frequency, phase, width, height) {
+    let d = `M 0,${yCenter}`;
+    const steps = 60;
+    for (let i = 0; i <= steps; i++) {
+        const x = (i / steps) * width;
+        const y = yCenter + Math.sin(i * frequency + phase) * amplitude;
+        d += ` L ${x},${y}`;
+    }
+    d += ` L ${width},${height} L 0,${height} Z`;
+    return d;
+}
+
+function drawWater(geo) {
+    const { waterlineY } = geo;
+    const width = CANVAS_WIDTH;
+    const height = CANVAS_HEIGHT;
+    const waterTop = waterlineY;
+
+    // ---- 1. Water gradient ----
+    const gradId = "waterGrad";
+    let grad = document.getElementById(gradId);
+    if (!grad) {
+        grad = el("linearGradient", { id: gradId, x1: "0", y1: "0", x2: "0", y2: "1" });
+        grad.appendChild(el("stop", { offset: "0%", "stop-color": "#7ec8e3" }));
+        grad.appendChild(el("stop", { offset: "100%", "stop-color": "#1e5a7a" }));
+        getDefs().appendChild(grad);
+    }
+
+    // ---- 2. Base water rectangle ----
+    onto("waterLayer", el("rect", {
+        x: 0, y: waterTop,
+        width, height: height - waterTop,
+        fill: `url(#${gradId})`,
+        opacity: "0.9"
+    }));
+
+    // ---- 3. Static wave lines ----
+    const waveStyles = [
+        { yOff: 6,  amp: 4,  freq: 0.03, phase: 0,         color: "#b3dff0", opacity: 0.4, width: 2.5 },
+        { yOff: 16, amp: 6,  freq: 0.05, phase: 2.1,       color: "#89c8e0", opacity: 0.35, width: 2 },
+        { yOff: 28, amp: 5,  freq: 0.04, phase: 4.5,       color: "#a0d4ea", opacity: 0.3, width: 2 },
+        { yOff: 40, amp: 7,  freq: 0.06, phase: 1.3,       color: "#6eb5d1", opacity: 0.25, width: 1.8 }
+    ];
+
+    waveStyles.forEach(ws => {
+        const yCenter = waterTop + ws.yOff;
+        onto("waterLayer", el("path", {
+            d: wavePath(yCenter, ws.amp, ws.freq, ws.phase, width, height),
+            fill: "none",
+            stroke: ws.color,
+            "stroke-width": ws.width,
+            opacity: ws.opacity
+        }));
+    });
+
+    // ---- 4. Bow wake ----
+    const bowWakeX = geo.bowX + 20;
+    const bowWakeY = waterTop;
+    onto("waterLayer", el("polygon", {
+        points: `${bowWakeX},${bowWakeY} ${bowWakeX - 25},${bowWakeY + 8} ${bowWakeX + 10},${bowWakeY + 6} ${bowWakeX + 35},${bowWakeY + 12}`,
+        fill: "#ffffff",
+        opacity: "0.3"
+    }));
+
+    // ---- 5. Hull reflection ----
+    const hullPath = buildHullPath(geo);
+    const waterClipId = "waterClip";
+    let waterClip = document.getElementById(waterClipId);
+    if (!waterClip) {
+        waterClip = el("clipPath", { id: waterClipId });
+        waterClip.appendChild(el("rect", { x: 0, y: waterTop, width, height: height - waterTop }));
+        getDefs().appendChild(waterClip);
+    }
+    onto("waterLayer", el("path", {
+        d: hullPath,
+        fill: `url(#${gradId})`,
+        opacity: "0.15",
+        transform: `translate(0, ${waterTop * 2}) scale(1, -1)`,
+        "clip-path": `url(#${waterClipId})`
+    }));
+
+    // ---- 6. Waterline highlight ----
+    onto("waterLayer", el("path", {
+        d: `M ${geo.bowX + 10},${waterTop} Q ${(geo.bowX + geo.sternX) / 2},${waterTop - 2} ${geo.sternX - 10},${waterTop}`,
+        fill: "none",
+        stroke: "#d4f0ff",
+        "stroke-width": "2",
+        opacity: "0.8"
+    }));
+}
+
+// =====================================================
+// DRAWING FUNCTIONS
+// =====================================================
 function buildHullPath(geo) {
     const { bowX, sternX, weatherDeckY, keelY, bowSheer, sternSheer, hullLength } = geo;
     const tumblehome = hullLength * 0.04;
@@ -321,32 +473,18 @@ function drawHull(geo) {
     const hullColor = state.appearance.hullColor;
     const hullPath = buildHullPath(geo);
 
-    // ---- 1. Copper bottom (full hull below waterline will be covered later) ----
-    onto("hullLayer", el("path", {
-        d: hullPath,
-        fill: COPPER_COLOR,
-        stroke: "none"
-    }));
+    // Copper bottom
+    onto("hullLayer", el("path", { d: hullPath, fill: COPPER_COLOR, stroke: "none" }));
 
-    // ---- 2. Clip for the upper hull (above waterline) ----
     const aboveWaterId = "aboveWaterClip";
     let aboveClip = document.getElementById(aboveWaterId);
     if (!aboveClip) {
         aboveClip = el("clipPath", { id: aboveWaterId });
-        aboveClip.appendChild(el("rect", {
-            x: 0, y: 0,
-            width: CANVAS_WIDTH, height: geo.waterlineY
-        }));
+        aboveClip.appendChild(el("rect", { x: 0, y: 0, width: CANVAS_WIDTH, height: geo.waterlineY }));
         getDefs().appendChild(aboveClip);
     }
-    onto("hullLayer", el("path", {
-        d: hullPath,
-        fill: hullColor,
-        stroke: "none",
-        "clip-path": `url(#${aboveWaterId})`
-    }));
+    onto("hullLayer", el("path", { d: hullPath, fill: hullColor, stroke: "none", "clip-path": `url(#${aboveWaterId})` }));
 
-    // ---- 3. Hull interior details (planks, wales, shading) ----
     const clipId = "hullClip";
     let hullClip = document.getElementById(clipId);
     if (!hullClip) {
@@ -357,21 +495,15 @@ function drawHull(geo) {
 
     const interiorGrp = el("g", { "clip-path": `url(#${clipId})` });
 
-    // a) Plank lines (enhanced)
+    // Planks
     const plankClr = darken(hullColor, 22);
     const plankLight = lighten(hullColor, 20);
     for (let py = geo.weatherDeckY + 16; py < geo.keelY + 32; py += 20) {
-        interiorGrp.appendChild(el("line", {
-            x1: 0, y1: py, x2: 1500, y2: py,
-            stroke: plankClr, "stroke-width": "1.2", opacity: "0.5"
-        }));
-        interiorGrp.appendChild(el("line", {
-            x1: 0, y1: py + 1.5, x2: 1500, y2: py + 1.5,
-            stroke: plankLight, "stroke-width": "0.8", opacity: "0.35"
-        }));
+        interiorGrp.appendChild(el("line", { x1: 0, y1: py, x2: 1500, y2: py, stroke: plankClr, "stroke-width": "1.2", opacity: "0.5" }));
+        interiorGrp.appendChild(el("line", { x1: 0, y1: py + 1.5, x2: 1500, y2: py + 1.5, stroke: plankLight, "stroke-width": "0.8", opacity: "0.35" }));
     }
 
-    // b) Wales (reinforcing bands)
+    // Wales
     const freeboard = geo.weatherDeckY - geo.waterlineY;
     const waleYs = [
         geo.weatherDeckY - freeboard * 0.22,
@@ -380,17 +512,11 @@ function drawHull(geo) {
     ];
     const waleColor = darken(hullColor, 35);
     waleYs.forEach(wy => {
-        interiorGrp.appendChild(el("line", {
-            x1: 0, y1: wy, x2: 1500, y2: wy,
-            stroke: waleColor, "stroke-width": "4.5", opacity: "0.85"
-        }));
-        interiorGrp.appendChild(el("line", {
-            x1: 0, y1: wy - 2, x2: 1500, y2: wy - 2,
-            stroke: lighten(hullColor, 5), "stroke-width": "1", opacity: "0.5"
-        }));
+        interiorGrp.appendChild(el("line", { x1: 0, y1: wy, x2: 1500, y2: wy, stroke: waleColor, "stroke-width": "4.5", opacity: "0.85" }));
+        interiorGrp.appendChild(el("line", { x1: 0, y1: wy - 2, x2: 1500, y2: wy - 2, stroke: lighten(hullColor, 5), "stroke-width": "1", opacity: "0.5" }));
     });
 
-    // c) 3D shading (vertical gradient)
+    // 3D shading
     const shadeId = "hullShadeGrad";
     let shadeGrad = document.getElementById(shadeId);
     if (!shadeGrad) {
@@ -399,42 +525,38 @@ function drawHull(geo) {
         shadeGrad.appendChild(el("stop", { offset: "100%", "stop-color": darken(hullColor, 30) }));
         getDefs().appendChild(shadeGrad);
     }
-    interiorGrp.appendChild(el("rect", {
-        x: 0, y: geo.weatherDeckY,
-        width: CANVAS_WIDTH, height: geo.keelY - geo.weatherDeckY + 5,
-        fill: `url(#${shadeId})`,
-        opacity: "0.25"
-    }));
+    interiorGrp.appendChild(el("rect", { x: 0, y: geo.weatherDeckY, width: CANVAS_WIDTH, height: geo.keelY - geo.weatherDeckY + 5, fill: `url(#${shadeId})`, opacity: "0.25" }));
 
     onto("hullLayer", interiorGrp);
 
-    // ---- 4. Hull outline (clean edge) ----
-    onto("hullLayer", el("path", {
-        d: hullPath,
-        fill: "none",
-        stroke: "#3d2510",
-        "stroke-width": "3.5"
-    }));
+    // Hull outline
+    onto("hullLayer", el("path", { d: hullPath, fill: "none", stroke: "#3d2510", "stroke-width": "3.5" }));
 
-    // ---- 5. Deck-level dark strip ----
-    onto("hullLayer", el("rect", {
-        x: geo.bowFairX - 8,
-        y: geo.weatherDeckY,
-        width: geo.sternFairX - geo.bowFairX + 18,
-        height: 10,
-        fill: darken(hullColor, 28),
-        opacity: "0.55"
-    }));
+    // Deck strip
+    onto("hullLayer", el("rect", { x: geo.bowFairX - 8, y: geo.weatherDeckY, width: geo.sternFairX - geo.bowFairX + 18, height: 6, fill: darken(hullColor, 28), opacity: "0.55" }));
+
+    // Hull railing
+    drawHullRailing(geo);
 }
 
-function drawRaisedDeck(layerId, x, y, w, h, hullClr, deckClr, railingPosts = true) {
+function drawRaisedDeck(layerId, x, y, w, h, hullClr, deckClr, railingPosts = true, showSteps = false) {
     onto(layerId, el("rect", { x, y, width: w, height: h, fill: darken(hullClr, 14), stroke: "#3d2510", "stroke-width": "2" }));
     onto(layerId, el("line", { x1: x+6, y1: y+5, x2: x+w-6, y2: y+5, stroke: deckClr, "stroke-width": "2.5" }));
-    if (railingPosts) {
-        for (let px = x+10; px < x+w-6; px += 18) {
-            onto(layerId, el("line", { x1: px, y1: y+2, x2: px, y2: y-5, stroke: "#5a3e2b", "stroke-width": "1.5" }));
+    if (showSteps) {
+        const stepCount = Math.floor(h / 6);
+        for (let s = 0; s < stepCount; s++) {
+            const sy = y + h - s * 6;
+            const sx = x + 4 + (s % 2) * 4;
+            onto(layerId, el("line", { x1: sx, y1: sy, x2: sx + 8, y2: sy, stroke: darken(hullClr, 10), "stroke-width": "1.5" }));
         }
-        onto(layerId, el("line", { x1: x+5, y1: y-3, x2: x+w-5, y2: y-3, stroke: "#5a3e2b", "stroke-width": "2" }));
+    }
+    if (railingPosts) {
+        for (let px = x + 10; px < x + w - 6; px += 18) {
+            onto(layerId, el("line", { x1: px, y1: y + 2, x2: px, y2: y - 6, stroke: "#5a3e2b", "stroke-width": "1.5" }));
+        }
+        onto(layerId, el("line", { x1: x + 5, y1: y - 4, x2: x + w - 5, y2: y - 4, stroke: "#5a3e2b", "stroke-width": "2" }));
+        onto(layerId, el("line", { x1: x + 5, y1: y - 5, x2: x + w - 5, y2: y - 5, stroke: lighten("#5a3e2b", 20), "stroke-width": "1", opacity: "0.6" }));
+        onto(layerId, el("line", { x1: x + 5, y1: y - 1, x2: x + w - 5, y2: y - 1, stroke: "#5a3e2b", "stroke-width": "1.5" }));
     }
 }
 
@@ -442,203 +564,113 @@ function drawDeckStructures(geo) {
     const deckClr = state.appearance.deckColor;
     const hullClr = state.appearance.hullColor;
     const { weatherDeckY, forecastle, quarterdeck, poopDeck, bowFairX, sternFairX, gunDeckYs } = geo;
+
     for (const dy of gunDeckYs) {
-        onto("deckLayer", el("line", {
-            x1: bowFairX+18, y1: dy, x2: sternFairX-18, y2: dy,
-            stroke: deckClr, "stroke-width": "2.5", "stroke-dasharray": "10 4", opacity: "0.85"
-        }));
+        onto("deckLayer", el("line", { x1: bowFairX+18, y1: dy, x2: sternFairX-18, y2: dy, stroke: deckClr, "stroke-width": "2.5", "stroke-dasharray": "10 4", opacity: "0.85" }));
         for (let tx = bowFairX+30; tx < sternFairX-18; tx += 60) {
             onto("deckLayer", el("line", { x1: tx, y1: dy-4, x2: tx, y2: dy+4, stroke: deckClr, "stroke-width": "1.5", opacity: "0.55" }));
         }
     }
-    onto("deckLayer", el("line", { x1: bowFairX-14, y1: weatherDeckY, x2: sternFairX+12, y2: weatherDeckY, stroke: deckClr, "stroke-width": "3.5" }));
-    if (forecastle) drawRaisedDeck("deckLayer", forecastle.x, forecastle.y, forecastle.width, forecastle.height, hullClr, deckClr);
-    if (quarterdeck) drawRaisedDeck("deckLayer", quarterdeck.x, quarterdeck.y, quarterdeck.width, quarterdeck.height, hullClr, deckClr);
-    if (poopDeck) drawRaisedDeck("deckLayer", poopDeck.x, poopDeck.y, poopDeck.width, poopDeck.height, hullClr, deckClr, false);
+
+    if (forecastle) {
+        drawRaisedDeck("deckLayer", forecastle.x, forecastle.y, forecastle.width, forecastle.height, hullClr, deckClr, true, true);
+        const winCount = Math.max(1, Math.floor(forecastle.width / 60));
+        for (let i = 0; i < winCount; i++) {
+            const wx = forecastle.x + forecastle.width - 30 - i * 50;
+            const wy = forecastle.y + forecastle.height - 14;
+            onto("deckLayer", el("rect", { x: wx, y: wy, width: 10, height: 10, fill: "#F8DD9A", stroke: "#8b6942", "stroke-width": "1", rx: "1" }));
+            onto("deckLayer", el("line", { x1: wx + 5, y1: wy, x2: wx + 5, y2: wy + 10, stroke: "#8b6942", "stroke-width": "0.8", opacity: "0.6" }));
+        }
+    }
+
+    if (quarterdeck) {
+        drawRaisedDeck("deckLayer", quarterdeck.x, quarterdeck.y, quarterdeck.width, quarterdeck.height, hullClr, deckClr, true, true);
+        const winCount = Math.max(1, Math.floor(quarterdeck.width / 80));
+        for (let i = 0; i < winCount; i++) {
+            const wx = quarterdeck.x + 30 + i * 60;
+            const wy = quarterdeck.y + quarterdeck.height - 14;
+            onto("deckLayer", el("rect", { x: wx, y: wy, width: 10, height: 10, fill: "#F8DD9A", stroke: "#8b6942", "stroke-width": "1", rx: "1" }));
+            onto("deckLayer", el("line", { x1: wx + 5, y1: wy, x2: wx + 5, y2: wy + 10, stroke: "#8b6942", "stroke-width": "0.8", opacity: "0.6" }));
+        }
+    }
+
+    if (poopDeck) {
+        drawRaisedDeck("deckLayer", poopDeck.x, poopDeck.y, poopDeck.width, poopDeck.height, hullClr, deckClr, false, false);
+        const skyX = poopDeck.x + poopDeck.width / 2 - 8;
+        const skyY = poopDeck.y + 3;
+        onto("deckLayer", el("rect", { x: skyX, y: skyY, width: 16, height: 10, fill: "#F8F0D0", stroke: "#6b4a28", "stroke-width": "1", rx: "1" }));
+        onto("deckLayer", el("line", { x1: skyX + 8, y1: skyY, x2: skyX + 8, y2: skyY + 10, stroke: "#6b4a28", "stroke-width": "1", opacity: "0.7" }));
+        onto("deckLayer", el("line", { x1: skyX, y1: skyY + 5, x2: skyX + 16, y2: skyY + 5, stroke: "#6b4a28", "stroke-width": "1", opacity: "0.7" }));
+        const poleX = poopDeck.x + poopDeck.width - 10;
+        const poleTopY = poopDeck.y - 30;
+        onto("deckLayer", el("line", { x1: poleX, y1: poopDeck.y, x2: poleX, y2: poleTopY, stroke: "#4a3a2a", "stroke-width": "2" }));
+        onto("deckLayer", el("circle", { cx: poleX, cy: poleTopY, r: 2, fill: "#4a3a2a" }));
+    }
 }
 
 function drawGunPorts(geo) {
     const { gunDeckYs, bowFairX, sternFairX } = geo;
-    const lidColor = state.appearance.gunPortColor;   // now controls the closed lid
-    const frameColor = "#2a1a0c";                     // dark wood frame
-    const highlightColor = lighten(lidColor, 30);     // bevel highlight
+    const lidColor = state.appearance.gunPortColor;
+    const frameColor = "#2a1a0c";
+    const highlightColor = lighten(lidColor, 30);
 
     for (let d = 0; d < state.hullStructures.gunDecks; d++) {
         const dy = gunDeckYs[d];
         const pCnt = d === 0 ? state.armament.gunPortsLower : (d === 1 ? state.armament.gunPortsUpper : 0);
         if (pCnt <= 0) continue;
-
         const startX = bowFairX + 22;
         const endX = sternFairX - 30;
         const step = (endX - startX) / Math.max(1, pCnt - 1);
-
         for (let i = 0; i < pCnt; i++) {
             const px = startX + i * step;
-
-            // Outer frame
-            onto("armamentLayer", el("rect", {
-                x: px - 10, y: dy - 9,
-                width: 20, height: 14,
-                fill: frameColor,
-                stroke: "#0d0a06",
-                "stroke-width": "1.2",
-                rx: "2"
-            }));
-
-            // Lid
-            onto("armamentLayer", el("rect", {
-                x: px - 8, y: dy - 7,
-                width: 16, height: 10,
-                fill: lidColor,
-                stroke: darken(lidColor, 20),
-                "stroke-width": "1",
-                rx: "1"
-            }));
-
-            // Top bevel highlight
-            onto("armamentLayer", el("line", {
-                x1: px - 7, y1: dy - 6,
-                x2: px + 7, y2: dy - 6,
-                stroke: highlightColor,
-                "stroke-width": "1.2",
-                opacity: "0.8"
-            }));
-
-            // Subtle shadow below the frame
-            onto("armamentLayer", el("rect", {
-                x: px - 10, y: dy - 3,
-                width: 20, height: 6,
-                fill: "#000000",
-                opacity: "0.2",
-                rx: "1"
-            }));
+            onto("armamentLayer", el("rect", { x: px - 10, y: dy - 9, width: 20, height: 14, fill: frameColor, stroke: "#0d0a06", "stroke-width": "1.2", rx: "2" }));
+            onto("armamentLayer", el("rect", { x: px - 8, y: dy - 7, width: 16, height: 10, fill: lidColor, stroke: darken(lidColor, 20), "stroke-width": "1", rx: "1" }));
+            onto("armamentLayer", el("line", { x1: px - 7, y1: dy - 6, x2: px + 7, y2: dy - 6, stroke: highlightColor, "stroke-width": "1.2", opacity: "0.8" }));
+            onto("armamentLayer", el("rect", { x: px - 10, y: dy - 3, width: 20, height: 6, fill: "#000000", opacity: "0.2", rx: "1" }));
         }
     }
 }
 
 function drawCabinsAndGallery(geo) {
     const { sternX, weatherDeckY, quarterdeck, hullSize } = geo;
-    const {
-        galleryWidth, windowCount, galleryBaseY, galleryTopY, galleryHeight,
-        windowSpacing, windowWidth, windowHeight,
-        galleryRows = 1, rowHeight = galleryHeight
-    } = geo;   // fallback to a single row if properties are missing
+    const { galleryWidth, windowCount, galleryBaseY, galleryTopY, galleryHeight,
+            windowSpacing, windowWidth, windowHeight,
+            galleryRows = 1, rowHeight = galleryHeight } = geo;
 
     if (state.hullStructures.sternGallery) {
         const galLeftX = sternX - galleryWidth;
         const galRightX = sternX - 2;
-
-        // ---- Gallery background ----
-        onto("detailLayer", el("rect", {
-            x: galLeftX, y: galleryTopY,
-            width: galleryWidth, height: galleryHeight,
-            fill: darken(state.appearance.hullColor, 30),
-            stroke: "#3d2510",
-            "stroke-width": "2",
-            rx: "4"
-        }));
-
-        // ---- Windows (one or two rows) ----
+        onto("detailLayer", el("rect", { x: galLeftX, y: galleryTopY, width: galleryWidth, height: galleryHeight, fill: darken(state.appearance.hullColor, 30), stroke: "#3d2510", "stroke-width": "2", rx: "4" }));
         const verticalGap = galleryHeight * 0.08;
         for (let row = 0; row < galleryRows; row++) {
             const rowTopY = galleryTopY + row * (rowHeight + (row > 0 ? verticalGap : 0));
             const windowY = rowTopY + (rowHeight - windowHeight) / 2;
-
             for (let i = 0; i < windowCount; i++) {
                 const wx = galLeftX + windowSpacing * (i + 1) - windowWidth / 2;
                 const wy = windowY;
-
-                // Window opening
-                onto("detailLayer", el("rect", {
-                    x: wx, y: wy,
-                    width: windowWidth, height: windowHeight,
-                    fill: "#F8DD9A",
-                    stroke: "#8b6942",
-                    "stroke-width": "1.5",
-                    rx: "2"
-                }));
-
-                // Arched top
+                onto("detailLayer", el("rect", { x: wx, y: wy, width: windowWidth, height: windowHeight, fill: "#F8DD9A", stroke: "#8b6942", "stroke-width": "1.5", rx: "2" }));
                 const archCtrlY = wy - windowHeight * 0.2;
-                onto("detailLayer", el("path", {
-                    d: `M ${wx},${wy} Q ${wx + windowWidth / 2},${archCtrlY} ${wx + windowWidth},${wy}`,
-                    fill: "none",
-                    stroke: "#8b6942",
-                    "stroke-width": "1.5"
-                }));
-
-                // Window panes (cross)
-                onto("detailLayer", el("line", {
-                    x1: wx + windowWidth / 2, y1: wy,
-                    x2: wx + windowWidth / 2, y2: wy + windowHeight,
-                    stroke: "#8b6942", "stroke-width": "1", opacity: "0.6"
-                }));
-                onto("detailLayer", el("line", {
-                    x1: wx, y1: wy + windowHeight / 2,
-                    x2: wx + windowWidth, y2: wy + windowHeight / 2,
-                    stroke: "#8b6942", "stroke-width": "1", opacity: "0.6"
-                }));
+                onto("detailLayer", el("path", { d: `M ${wx},${wy} Q ${wx + windowWidth / 2},${archCtrlY} ${wx + windowWidth},${wy}`, fill: "none", stroke: "#8b6942", "stroke-width": "1.5" }));
+                onto("detailLayer", el("line", { x1: wx + windowWidth / 2, y1: wy, x2: wx + windowWidth / 2, y2: wy + windowHeight, stroke: "#8b6942", "stroke-width": "1", opacity: "0.6" }));
+                onto("detailLayer", el("line", { x1: wx, y1: wy + windowHeight / 2, x2: wx + windowWidth, y2: wy + windowHeight / 2, stroke: "#8b6942", "stroke-width": "1", opacity: "0.6" }));
             }
         }
-
-        // ---- Pilasters ----
         for (let i = 0; i <= windowCount; i++) {
             const px = galLeftX + windowSpacing * (i + 0.5);
-            onto("detailLayer", el("line", {
-                x1: px, y1: galleryTopY,
-                x2: px, y2: galleryBaseY,
-                stroke: darken(state.appearance.hullColor, 15),
-                "stroke-width": "2.5"
-            }));
+            onto("detailLayer", el("line", { x1: px, y1: galleryTopY, x2: px, y2: galleryBaseY, stroke: darken(state.appearance.hullColor, 15), "stroke-width": "2.5" }));
         }
-
-        // ---- Taffrail / gallery roof ----
         const roofY = galleryTopY - 8;
-        onto("detailLayer", el("path", {
-            d: `M ${galLeftX - 10},${roofY} Q ${(galLeftX + galRightX) / 2},${roofY - 8} ${galRightX + 10},${roofY}`,
-            fill: "none",
-            stroke: "#4a3a2a",
-            "stroke-width": "3"
-        }));
-        onto("detailLayer", el("path", {
-            d: `M ${galLeftX - 10},${roofY} Q ${(galLeftX + galRightX) / 2},${roofY - 8} ${galRightX + 10},${roofY} Z`,
-            fill: darken(state.appearance.hullColor, 10),
-            stroke: "none",
-            opacity: "0.7"
-        }));
-
-        // ---- Lantern ----
+        onto("detailLayer", el("path", { d: `M ${galLeftX - 10},${roofY} Q ${(galLeftX + galRightX) / 2},${roofY - 8} ${galRightX + 10},${roofY}`, fill: "none", stroke: "#4a3a2a", "stroke-width": "3" }));
+        onto("detailLayer", el("path", { d: `M ${galLeftX - 10},${roofY} Q ${(galLeftX + galRightX) / 2},${roofY - 8} ${galRightX + 10},${roofY} Z`, fill: darken(state.appearance.hullColor, 10), stroke: "none", opacity: "0.7" }));
         if ((hullSize === "large" || hullSize === "veryLarge") && quarterdeck) {
             const lanternX = (galLeftX + galRightX) / 2;
             const lanternY = roofY - 20;
-            onto("detailLayer", el("line", {
-                x1: lanternX, y1: roofY,
-                x2: lanternX, y2: lanternY,
-                stroke: "#4a3a2a", "stroke-width": "2"
-            }));
-            onto("detailLayer", el("rect", {
-                x: lanternX - 6, y: lanternY - 10,
-                width: 12, height: 10,
-                fill: "#F0D08A",
-                stroke: "#8b6942",
-                "stroke-width": "1",
-                rx: "1"
-            }));
-            onto("detailLayer", el("rect", {
-                x: lanternX - 4, y: lanternY - 8,
-                width: 8, height: 6,
-                fill: "#FFFFCC",
-                stroke: "none",
-                opacity: "0.9"
-            }));
-            onto("detailLayer", el("polygon", {
-                points: `${lanternX - 7},${lanternY - 10} ${lanternX + 7},${lanternY - 10} ${lanternX},${lanternY - 16}`,
-                fill: "#6b4a28"
-            }));
+            onto("detailLayer", el("line", { x1: lanternX, y1: roofY, x2: lanternX, y2: lanternY, stroke: "#4a3a2a", "stroke-width": "2" }));
+            onto("detailLayer", el("rect", { x: lanternX - 6, y: lanternY - 10, width: 12, height: 10, fill: "#F0D08A", stroke: "#8b6942", "stroke-width": "1", rx: "1" }));
+            onto("detailLayer", el("rect", { x: lanternX - 4, y: lanternY - 8, width: 8, height: 6, fill: "#FFFFCC", stroke: "none", opacity: "0.9" }));
+            onto("detailLayer", el("polygon", { points: `${lanternX - 7},${lanternY - 10} ${lanternX + 7},${lanternY - 10} ${lanternX},${lanternY - 16}`, fill: "#6b4a28" }));
         }
     }
-
-    // Hull windows (unchanged)
     if (state.hullStructures.hullWindows) {
         const winY = weatherDeckY + 22;
         const wStart = geo.bowFairX + 30;
@@ -646,14 +678,7 @@ function drawCabinsAndGallery(geo) {
         const cnt = Math.min(6, Math.max(2, Math.floor((wEnd-wStart)/80)));
         const step = (wEnd - wStart) / Math.max(1, cnt-1);
         for (let i = 0; i < cnt; i++) {
-            onto("detailLayer", el("rect", {
-                x: wStart + i*step - 7, y: winY,
-                width: 14, height: 16,
-                fill: "#D4B483",
-                stroke: "#5a3e2b",
-                "stroke-width": "1.5",
-                rx: "2"
-            }));
+            onto("detailLayer", el("rect", { x: wStart + i*step - 7, y: winY, width: 14, height: 16, fill: "#D4B483", stroke: "#5a3e2b", "stroke-width": "1.5", rx: "2" }));
         }
     }
 }
@@ -675,30 +700,15 @@ function drawMastsAndSails(geo) {
     const jibClewY    = weatherDeckY - 75;
 
     if (state.bowspritType === "jib") {
-        drawTriangularSail(
-            bspritTipX, bspritTipY,
-            foreTopX - 12, foreTopY + 28,
-            jibClewX, jibClewY,
-            sailColor
-        );
+        drawTriangularSail(bspritTipX, bspritTipY, foreTopX - 12, foreTopY + 28, jibClewX, jibClewY, sailColor);
     } else if (state.bowspritType === "twoJibs") {
-        drawTriangularSail(
-            bspritTipX, bspritTipY,
-            foreTopX - 12, foreTopY + 28,
-            jibClewX, jibClewY,
-            sailColor
-        );
+        drawTriangularSail(bspritTipX, bspritTipY, foreTopX - 12, foreTopY + 28, jibClewX, jibClewY, sailColor);
         const mx = Math.round((bspritTipX + bspritRootX) / 2);
         const my = Math.round((bspritTipY + bspritRootY) / 2);
         const foreLowerTopY = mastData[0]?.segments[0]?.yTop ?? (foreTopY + 200);
         const innerClewX = bspritRootX + bspritSpan * 0.52;
         const innerClewY = weatherDeckY - 90;
-        drawTriangularSail(
-            mx, my,
-            foreTopX, foreLowerTopY + 25,
-            innerClewX, innerClewY,
-            sailColor
-        );
+        drawTriangularSail(mx, my, foreTopX, foreLowerTopY + 25, innerClewX, innerClewY, sailColor);
     } else if (state.bowspritType === "squareSpritsail") {
         const sx = Math.round(bspritRootX + (bspritTipX-bspritRootX)*0.65);
         const sy = Math.round(bspritRootY + (bspritTipY-bspritRootY)*0.65);
@@ -709,18 +719,8 @@ function drawMastsAndSails(geo) {
         const rightX = sx + hw;
         const topLeftY = sy - tilt;
         const topRightY = sy + tilt;
-
-        onto("riggingLayer", el("line", {
-            x1: leftX - 10, y1: topLeftY,
-            x2: rightX + 10, y2: topRightY,
-            stroke: "#7a5330", "stroke-width": "4"
-        }));
-        onto("sailLayer", el("path", {
-            d: curvedSailPath(sx, sy, spritW, spritH, tilt),
-            fill: sailColor,
-            stroke: "#b18753",
-            "stroke-width": "1.5"
-        }));
+        onto("riggingLayer", el("line", { x1: leftX - 10, y1: topLeftY, x2: rightX + 10, y2: topRightY, stroke: "#7a5330", "stroke-width": "4" }));
+        onto("sailLayer", el("path", { d: curvedSailPath(sx, sy, spritW, spritH, tilt), fill: sailColor, stroke: "#b18753", "stroke-width": "1.5" }));
     }
 
     for (let idx = 0; idx < mastData.length; idx++) {
@@ -734,7 +734,9 @@ function drawMastsAndSails(geo) {
         onto("mastLayer", el("line", { x1: mastX, y1: weatherDeckY, x2: mastX, y2: mastBotY, stroke: "#5e3e1c", "stroke-width": "13" }));
 
         if (rigType === "square") {
-            for (const yard of mast.yards) {
+            // draw from top to bottom so course (lowest) overlaps upper sails
+            for (let yi = mast.yards.length - 1; yi >= 0; yi--) {
+                const yard = mast.yards[yi];
                 const tilt = yard.height * 0.08;
                 const hw = yard.width / 2;
                 const leftX = mastX - hw;
@@ -766,28 +768,19 @@ function drawMastsAndSails(geo) {
                 const peakLength = mastH * 0.42;
                 const peakX      = mastX + peakLength;
                 const peakY      = throatY - peakLength * 0.38;
-
-                onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX,    y2: peakY,    stroke: "#7a5330", "stroke-width": "5" }));
-                onto("riggingLayer", el("line", { x1: mastX, y1: boomY,   x2: boomEndX, y2: boomEndY, stroke: "#7a5330", "stroke-width": "5" }));
-
+                onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX, y2: peakY, stroke: "#7a5330", "stroke-width": "5" }));
+                onto("riggingLayer", el("line", { x1: mastX, y1: boomY, x2: boomEndX, y2: boomEndY, stroke: "#7a5330", "stroke-width": "5" }));
                 const leechLen   = Math.hypot(boomEndX - peakX, boomEndY - peakY);
                 const leechCtrlX = (peakX + boomEndX) / 2 + leechLen * 0.14;
                 const leechCtrlY = (peakY + boomEndY) / 2;
                 const footLen    = Math.hypot(mastX - boomEndX, boomY - boomEndY);
                 const footCtrlX  = (boomEndX + mastX) / 2;
                 const footCtrlY  = (boomEndY + boomY) / 2 + footLen * 0.06;
-
-                const d = `M ${mastX},${throatY} ` +
-                          `L ${peakX},${peakY} ` +
-                          `Q ${leechCtrlX},${leechCtrlY} ${boomEndX},${boomEndY} ` +
-                          `Q ${footCtrlX},${footCtrlY} ${mastX},${boomY} Z`;
-
+                const d = `M ${mastX},${throatY} L ${peakX},${peakY} Q ${leechCtrlX},${leechCtrlY} ${boomEndX},${boomEndY} Q ${footCtrlX},${footCtrlY} ${mastX},${boomY} Z`;
                 onto("sailLayer", el("path", { d, fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
-
                 function quadPt(ax, ay, cx, cy, bx, by, t) {
                     const u = 1 - t;
-                    return { x: u*u*ax + 2*u*t*cx + t*t*bx,
-                             y: u*u*ay + 2*u*t*cy + t*t*by };
+                    return { x: u*u*ax + 2*u*t*cx + t*t*bx, y: u*u*ay + 2*u*t*cy + t*t*by };
                 }
                 for (let i = 1; i <= 4; i++) {
                     const t = i / 5;
@@ -796,16 +789,12 @@ function drawMastsAndSails(geo) {
                     const rp = quadPt(peakX, peakY, leechCtrlX, leechCtrlY, boomEndX, boomEndY, t);
                     const smx = (lx + rp.x) / 2 + 5;
                     const smy = (ly + rp.y) / 2 + 4;
-                    onto("sailLayer", el("path", {
-                        d: `M ${lx},${ly} Q ${smx},${smy} ${rp.x},${rp.y}`,
-                        fill: "none", stroke: "#c8a87a", "stroke-width": "0.8", opacity: "0.45"
-                    }));
+                    onto("sailLayer", el("path", { d: `M ${lx},${ly} Q ${smx},${smy} ${rp.x},${rp.y}`, fill: "none", stroke: "#c8a87a", "stroke-width": "0.8", opacity: "0.45" }));
                 }
             }
             if (state.masts[idx].gaff.hasSquareTopsail) {
                 const tsW = 155, tsH = 100;
-                const topmastTop = mast.segments.find(s => s.name === "topmast")?.yTop
-                    || (weatherDeckY - mastH*0.85);
+                const topmastTop = mast.segments.find(s => s.name === "topmast")?.yTop || (weatherDeckY - mastH*0.85);
                 const tsY = topmastTop + 35;
                 if (tsY > mast.mastTopY + 8) {
                     const tilt = tsH * 0.08;
@@ -814,18 +803,8 @@ function drawMastsAndSails(geo) {
                     const rightX = mastX + hw;
                     const topLeftY = tsY - tilt;
                     const topRightY = tsY + tilt;
-
-                    onto("riggingLayer", el("line", {
-                        x1: leftX - 16, y1: topLeftY,
-                        x2: rightX + 16, y2: topRightY,
-                        stroke: "#7a5330", "stroke-width": "5"
-                    }));
-                    onto("sailLayer", el("path", {
-                        d: curvedSailPath(mastX, tsY, tsW, tsH, tilt),
-                        fill: sailColor,
-                        stroke: "#b8915e",
-                        "stroke-width": "1.5"
-                    }));
+                    onto("riggingLayer", el("line", { x1: leftX - 16, y1: topLeftY, x2: rightX + 16, y2: topRightY, stroke: "#7a5330", "stroke-width": "5" }));
+                    onto("sailLayer", el("path", { d: curvedSailPath(mastX, tsY, tsW, tsH, tilt), fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
                 }
             }
         } else if (rigType === "lateen") {
@@ -861,12 +840,7 @@ function drawMastsAndSails(geo) {
     if (staysailsData && staysailsData.length > 0) {
         for (const ss of staysailsData) {
             if (state.rig.staysails[ss.type] === true) {
-                drawTriangularSail(
-                    ss.tackX, ss.tackY,
-                    ss.headX, ss.headY,
-                    ss.clewX, ss.clewY,
-                    sailColor
-                );
+                drawTriangularSail(ss.tackX, ss.tackY, ss.headX, ss.headY, ss.clewX, ss.clewY, sailColor);
             }
         }
     }
@@ -876,17 +850,18 @@ function drawShip() {
     try {
         clearSVG();
         getDefs();
-        addLayer("waterLayer");
-        addLayer("hullLayer");
-        addLayer("deckLayer");
-        addLayer("armamentLayer");
-        addLayer("mastLayer");
-        addLayer("riggingLayer");
-        addLayer("sailLayer");
-        addLayer("detailLayer");
+        // Back-to-front layer order:
+        addLayer("hullLayer");        // hull, planks, wales, copper, railing
+        addLayer("deckLayer");        // deck structures, castles, details
+        addLayer("armamentLayer");    // gun ports
+        addLayer("mastLayer");        // masts (behind sails)
+        addLayer("riggingLayer");     // shrouds, stays, ratlines, yards
+        addLayer("sailLayer");        // sails
+        addLayer("detailLayer");      // stern gallery, windows, lantern
+        addLayer("waterLayer");       // water on top of everything
 
         const geo = buildShipGeometry();
-        drawWater(geo);
+        drawWater(geo);               // drawn last → appears on top
         drawHull(geo);
         drawDeckStructures(geo);
         drawGunPorts(geo);
@@ -895,4 +870,4 @@ function drawShip() {
     } catch (err) {
         console.error("drawShip() failed:", err);
     }
-}   
+}
