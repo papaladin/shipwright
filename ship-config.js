@@ -292,7 +292,9 @@ const FLAG_EMBLEMS = {
     skull: {   // simplified skull & crossbones (white on black)
         bg: '#000000',
         fg: '#FFFFFF',
-        path: 'M10,2 C7,2 5,4 5,7 L5,9 L3,11 L3,13 L5,12 L5,17 L7,17 L7,12 L9,12 L9,17 L11,17 L11,12 L13,12 L13,17 L15,17 L15,12 L17,13 L17,11 L15,9 L15,7 C15,4 13,2 10,2 Z M10,4 C11.5,4 13,5.5 13,7 L13,8 L7,8 L7,7 C7,5.5 8.5,4 10,4 Z M8,10 L9,10 L9,11 L8,11 Z M11,10 L12,10 L12,11 L11,11 Z'
+        // Simple skull (circle) + crossbones (two crossing lines)
+        path: 'M10,3 A4,4 0 1,1 10,11 A4,4 0 1,1 10,3 Z ' +
+              'M10,11 L10,18 M5,14 L15,14'
     },
     crown: {   // simple crown (gold on dark red)
         bg: '#8B0000',
@@ -316,7 +318,6 @@ state.flags = {
     mizzen: { enabled: false, design: 'solid', primary: '#FF0000', secondary: '#FFFFFF' },
     stern:  { enabled: false, design: 'solid', primary: '#FF0000', secondary: '#FFFFFF' }
 };
-
 
 
 // =====================================================

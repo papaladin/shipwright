@@ -12,7 +12,7 @@ function buildSquareMast(totalHeight, sails, weatherDeckY, hullLength, hullHeigh
 
     const mastTopY = weatherDeckY - totalHeight;
 
-    // ---- Mast segments ----
+    // ---- Mast segments (unchanged) ----
     let segDefs;
     if (sailCount === 0) {
         segDefs = [
@@ -36,7 +36,7 @@ function buildSquareMast(totalHeight, sails, weatherDeckY, hullLength, hullHeigh
             { name: "topmast", heightFrac: 0.30, width: 9  },
             { name: "topgallant", heightFrac: 0.15, width: 7 }
         ];
-    } else { // sailCount == 4
+    } else {
         segDefs = [
             { name: "lower",   heightFrac: 0.48, width: 12 },
             { name: "topmast", heightFrac: 0.27, width: 9  },
@@ -70,10 +70,41 @@ function buildSquareMast(totalHeight, sails, weatherDeckY, hullLength, hullHeigh
             return { name, width, height: width / aspect };
         });
 
+        // *** Size multiplier by hull size ***
+        let sizeMultiplier;
+        let footClearanceRatio;
+        switch (state.hullSize) {
+            case "small":
+                sizeMultiplier = 2.0;
+                footClearanceRatio = 0.30;
+                break;
+            case "medium":
+                sizeMultiplier = 1.5;
+                footClearanceRatio = 0.26;
+                break;
+            case "large":
+                sizeMultiplier = 1.2;
+                footClearanceRatio = 0.22;
+                break;
+            case "veryLarge":
+                sizeMultiplier = 1.2;
+                footClearanceRatio = 0.22;
+                break;
+            default:
+                sizeMultiplier = 1.0;
+                footClearanceRatio = 0.20;
+        }
+        if (sizeMultiplier !== 1.0) {
+            sailData.forEach(s => {
+                s.width *= sizeMultiplier;
+                s.height = s.width / RIG_CONSTANTS.square.aspectRatios[s.name];
+            });
+        }
+
         const minGap = Math.max(8, hullHeight * 0.04);
         const topClearance = Math.max(14, hullHeight * 0.06);
 
-        const baseFootClearance = hullHeight * 0.20;
+        const baseFootClearance = hullHeight * footClearanceRatio;
         const courseBelly = sailData[0].height * 0.10;
         const effectiveFootClearance = baseFootClearance + courseBelly;
 
@@ -319,7 +350,7 @@ function buildShipGeometry() {
         return weatherDeckY - hullHeight * 0.45;
     })();
 
-    const galleryBaseY = waterlineY + hullHeight * 0.18;
+    const galleryBaseY = waterlineY - hullHeight * 0.1;
     const galleryHeight = Math.max(30, galleryBaseY - galleryTopY);
 
     const galleryRows = (state.hullSize === "large" || state.hullSize === "veryLarge") ? 2 : 1;

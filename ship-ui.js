@@ -408,5 +408,5 @@ initSteppers();
 rebuildGunPortsUI();
 rebuildMastRiggingUI();
 rebuildStaysailsUI();
-rebuildFlagsUI();   // <-- new
+rebuildFlagsUI();
 updateAndDraw();
