@@ -30,7 +30,7 @@ function curvedSailPath(mastX, yardY, sailWidth, sailHeight) {
     const leftX   = mastX - hw;
     const rightX  = mastX + hw;
     const bottomY = yardY + sailHeight;
-    const topBelly    = sailHeight * 0.05;   // upward arch (wind fill)
+    const topBelly    = sailHeight * -0.05;   // upward arch (wind fill)
     const bottomBelly = sailHeight * 0.10;   // downward belly
     return `M ${leftX},${yardY} ` +
            `Q ${mastX},${yardY - topBelly} ${rightX},${yardY} ` +
@@ -69,6 +69,174 @@ function drawJib(x0, y0, x1, y1, depth) {
         stroke: "#b18753",
         "stroke-width": "2"
     }));
+}
+
+// =====================================================
+// STANDING RIGGING (stays, shrouds, ratlines, backstays)
+// =====================================================
+function drawStandingRigging(geo) {
+    const { mastData, weatherDeckY, hullLength, bspritTipX, bspritTipY, sternX } = geo;
+    const lowerShroudCount = 4;          // shrouds per side on lower mast
+    const topmastShroudCount = 3;        // shrouds per side on topmast
+    const ratlineSpacing = 15;
+    const stayStroke = "#5a3e2b";
+    const shroudStroke = "#6b5a42";
+    const ratlineStroke = "#5a4a3a";
+    const backstayStroke = "#6b5a42";
+
+    // Helper to find segment tops
+    function segmentTop(mast, name) {
+        const seg = mast.segments.find(s => s.name === name);
+        return seg ? seg.yTop : null;
+    }
+
+    // For each mast, determine highest usable head for stays and backstays:
+    // topgallant if exists, else topmast if exists, else lower head (fallback)
+    const mastHeads = mastData.map(mast => {
+        let headY = segmentTop(mast, "lower"); // always exists
+        let headName = "lower";
+        if (segmentTop(mast, "topgallant") !== null) {
+            headY = segmentTop(mast, "topgallant");
+            headName = "topgallant";
+        } else if (segmentTop(mast, "topmast") !== null) {
+            headY = segmentTop(mast, "topmast");
+            headName = "topmast";
+        }
+        return { y: headY, name: headName };
+    });
+
+    // ----- STAYS -----
+    // Forestay: bowsprit tip → foremast head
+    if (mastData.length >= 1) {
+        onto("riggingLayer", el("line", {
+            x1: bspritTipX, y1: bspritTipY,
+            x2: mastData[0].x, y2: mastHeads[0].y,
+            stroke: stayStroke, "stroke-width": "2.5", opacity: "0.9"
+        }));
+    }
+
+    // Mainstay: foremast head → mainmast head
+    if (mastData.length >= 2) {
+        onto("riggingLayer", el("line", {
+            x1: mastData[0].x, y1: mastHeads[0].y,
+            x2: mastData[1].x, y2: mastHeads[1].y,
+            stroke: stayStroke, "stroke-width": "2.5", opacity: "0.9"
+        }));
+    }
+
+    // Mizzenstay: mainmast head → mizzen head
+    if (mastData.length >= 3) {
+        onto("riggingLayer", el("line", {
+            x1: mastData[1].x, y1: mastHeads[1].y,
+            x2: mastData[2].x, y2: mastHeads[2].y,
+            stroke: stayStroke, "stroke-width": "2.5", opacity: "0.9"
+        }));
+    }
+
+    // ----- SHROUDS AND RATLINES (for each mast) -----
+    for (let i = 0; i < mastData.length; i++) {
+        const mast = mastData[i];
+        const xMast = mast.x;
+        const lowerHeadY = segmentTop(mast, "lower");
+        const topmastHeadY = segmentTop(mast, "topmast");
+        // fallback if no topmast (unlikely) but just in case
+        const effectiveTopmastHeadY = topmastHeadY !== null ? topmastHeadY : lowerHeadY;
+
+        // Lower shrouds
+        const lowerBaseY = weatherDeckY + 8;
+        const lowerSpread = hullLength * 0.065;
+        // draw shrouds
+        for (let s = 0; s < lowerShroudCount; s++) {
+            const t = s / (lowerShroudCount - 1); // 0 to 1
+            // fan out: innermost shroud less spread, outermost more
+            const lx = xMast - lowerSpread * (0.5 + t * 0.7);
+            const rx = xMast + lowerSpread * (0.5 + t * 0.7);
+            // left
+            onto("riggingLayer", el("line", {
+                x1: lx, y1: lowerBaseY,
+                x2: xMast, y2: lowerHeadY,
+                stroke: shroudStroke, "stroke-width": "1.6", opacity: "0.8"
+            }));
+            // right
+            onto("riggingLayer", el("line", {
+                x1: rx, y1: lowerBaseY,
+                x2: xMast, y2: lowerHeadY,
+                stroke: shroudStroke, "stroke-width": "1.6", opacity: "0.8"
+            }));
+        }
+
+        // Platform (top) at lower head – only if a topmast exists
+        if (topmastHeadY !== null) {
+            const platformHalfWidth = hullLength * 0.04;
+            const platformY = lowerHeadY;
+            onto("riggingLayer", el("line", {
+                x1: xMast - platformHalfWidth, y1: platformY,
+                x2: xMast + platformHalfWidth, y2: platformY,
+                stroke: "#4a3a2a", "stroke-width": "3", opacity: "0.9"
+            }));
+            // small vertical lines at platform edges (optional)
+            onto("riggingLayer", el("line", { x1: xMast - platformHalfWidth, y1: platformY-4, x2: xMast - platformHalfWidth, y2: platformY+4, stroke: "#4a3a2a", "stroke-width": "2", opacity: "0.8" }));
+            onto("riggingLayer", el("line", { x1: xMast + platformHalfWidth, y1: platformY-4, x2: xMast + platformHalfWidth, y2: platformY+4, stroke: "#4a3a2a", "stroke-width": "2", opacity: "0.8" }));
+        }
+
+        // Lower ratlines
+        const lowerLeftOuter  = xMast - lowerSpread * 1.2;
+        const lowerRightOuter = xMast + lowerSpread * 1.2;
+        for (let yy = lowerBaseY + 10; yy < lowerHeadY - 6; yy += ratlineSpacing) {
+            const t = (yy - lowerBaseY) / (lowerHeadY - lowerBaseY);
+            const lx = lowerLeftOuter + (xMast - lowerLeftOuter) * t;
+            const rx = lowerRightOuter + (xMast - lowerRightOuter) * t;
+            onto("riggingLayer", el("line", {
+                x1: lx, y1: yy,
+                x2: rx, y2: yy,
+                stroke: ratlineStroke, "stroke-width": "1.2", opacity: "0.7"
+            }));
+        }
+
+        // Topmast shrouds (if topmast exists)
+        if (topmastHeadY !== null && topmastHeadY !== lowerHeadY) {
+            const topBaseY = lowerHeadY; // platform Y
+            const topSpread = hullLength * 0.04;
+            for (let s = 0; s < topmastShroudCount; s++) {
+                const t = s / (topmastShroudCount - 1);
+                const lx = xMast - topSpread * (0.5 + t * 0.8);
+                const rx = xMast + topSpread * (0.5 + t * 0.8);
+                onto("riggingLayer", el("line", {
+                    x1: lx, y1: topBaseY,
+                    x2: xMast, y2: topmastHeadY,
+                    stroke: shroudStroke, "stroke-width": "1.4", opacity: "0.8"
+                }));
+                onto("riggingLayer", el("line", {
+                    x1: rx, y1: topBaseY,
+                    x2: xMast, y2: topmastHeadY,
+                    stroke: shroudStroke, "stroke-width": "1.4", opacity: "0.8"
+                }));
+            }
+
+            // Topmast ratlines
+            const topLeftOuter  = xMast - topSpread * 1.3;
+            const topRightOuter = xMast + topSpread * 1.3;
+            for (let yy = topBaseY + 8; yy < topmastHeadY - 6; yy += ratlineSpacing) {
+                const t = (yy - topBaseY) / (topmastHeadY - topBaseY);
+                const lx = topLeftOuter + (xMast - topLeftOuter) * t;
+                const rx = topRightOuter + (xMast - topRightOuter) * t;
+                onto("riggingLayer", el("line", {
+                    x1: lx, y1: yy,
+                    x2: rx, y2: yy,
+                    stroke: ratlineStroke, "stroke-width": "1.2", opacity: "0.7"
+                }));
+            }
+        }
+
+        // Backstay (from topmast or topgallant head to stern)
+        const backstayHeadY = mastHeads[i].y;
+        const sternXPoint = sternX - (i === 0 ? 160 : i === 1 ? 100 : 50);
+        onto("riggingLayer", el("line", {
+            x1: xMast, y1: backstayHeadY,
+            x2: sternXPoint, y2: weatherDeckY - 10,
+            stroke: backstayStroke, "stroke-width": "1.6", opacity: "0.7"
+        }));
+    }
 }
 
 // =====================================================
@@ -267,7 +435,7 @@ function drawMastsAndSails(geo) {
             const lowerTop = mast.segments.find(s => s.name === "lower")?.yTop || (weatherDeckY - mastH*0.55);
             if (state.masts[idx].gaff.hasGaff) {
                 const throatY = lowerTop + 12;
-                const boomY = weatherDeckY - mastH * 0.12;
+                const boomY = weatherDeckY - mastH * 0.22;
                 const peakLength = mastH * 0.42;
                 const peakX = mastX + peakLength;
                 const peakY = throatY - peakLength * 0.72;
@@ -316,20 +484,15 @@ function drawMastsAndSails(geo) {
             }
         }
 
-        // Shrouds
-        const lowerTop = mast.segments.find(s => s.name === "lower")?.yTop || (weatherDeckY - 50);
-        const shroudY = lowerTop + 10;
-        onto("riggingLayer", el("line", { x1: mastX-12, y1: shroudY, x2: mastX-62, y2: weatherDeckY+12, stroke: "#7a6a52", "stroke-width": "2", opacity: "0.85" }));
-        onto("riggingLayer", el("line", { x1: mastX+12, y1: shroudY, x2: mastX+62, y2: weatherDeckY+12, stroke: "#7a6a52", "stroke-width": "2", opacity: "0.85" }));
-        if (idx === 0 && state.bowspritType !== "none") {
-            onto("riggingLayer", el("line", { x1: mastX, y1: mast.mastTopY+8, x2: bspritTipX+8, y2: bspritTipY+8, stroke: "#7a6a52", "stroke-width": "1.5", opacity: "0.8" }));
-        }
+        // NO simple shrouds here anymore – all standing rigging is in drawStandingRigging()
     }
+
+    // ----- DRAW STANDING RIGGING (stays, shrouds, ratlines, backstays) -----
+    drawStandingRigging(geo);
 
     // ----- DRAW STAYSAILS -----
     if (staysailsData && staysailsData.length > 0) {
         for (const ss of staysailsData) {
-            // Only draw if the corresponding state flag is true
             const key = ss.type;
             if (state.rig.staysails[key] === true) {
                 drawJib(ss.footX, ss.footY, ss.headX, ss.headY, ss.depth);

@@ -1,104 +1,162 @@
 // =====================================================
-// MAST SEGMENT COMPUTATION (SQUARE RIG)
+// MAST BUILDERS (square, gaff, lateen)
 // =====================================================
-function computeSquareMastSegments(totalHeight, sails, weatherDeckY, hullHeight, hullLength) {
+
+function buildSquareMast(totalHeight, sails, weatherDeckY, hullLength, hullHeight) {
     const enabled = [];
     if (sails.course) enabled.push("course");
     if (sails.topsail) enabled.push("topsail");
     if (sails.topgallant) enabled.push("topgallant");
     if (sails.royal) enabled.push("royal");
+    const sailCount = enabled.length;
 
-    // Bare poles fallback
-    if (enabled.length === 0) {
-        const mastScale = Math.max(0.7, hullLength / 900);
-        const lowerH = totalHeight * 0.78;
-        const topmastH = totalHeight * 0.22;
-        return {
-            segments: [
-                { name: "lower", yTop: weatherDeckY - lowerH, yBottom: weatherDeckY, width: 12 * mastScale },
-                { name: "topmast", yTop: weatherDeckY - lowerH - topmastH, yBottom: weatherDeckY - lowerH, width: 8 * mastScale }
-            ],
-            yards: [],
-            mastTopY: weatherDeckY - lowerH - topmastH
-        };
+    const mastTopY = weatherDeckY - totalHeight;
+
+    // ---- Mast segments (unchanged) ----
+    let segDefs;
+    if (sailCount === 0) {
+        segDefs = [
+            { name: "lower",   heightFrac: 0.78, width: 12 },
+            { name: "topmast", heightFrac: 0.22, width: 8  }
+        ];
+    } else if (sailCount === 1) {
+        segDefs = [
+            { name: "lower",   heightFrac: 0.85, width: 12 },
+            { name: "topmast", heightFrac: 0.15, width: 9  }
+        ];
+    } else if (sailCount === 2) {
+        segDefs = [
+            { name: "lower",   heightFrac: 0.60, width: 12 },
+            { name: "topmast", heightFrac: 0.30, width: 9  },
+            { name: "topgallant", heightFrac: 0.10, width: 7 }
+        ];
+    } else if (sailCount === 3) {
+        segDefs = [
+            { name: "lower",   heightFrac: 0.55, width: 12 },
+            { name: "topmast", heightFrac: 0.30, width: 9  },
+            { name: "topgallant", heightFrac: 0.15, width: 7 }
+        ];
+    } else { // sailCount == 4
+        segDefs = [
+            { name: "lower",   heightFrac: 0.48, width: 12 },
+            { name: "topmast", heightFrac: 0.27, width: 9  },
+            { name: "topgallant", heightFrac: 0.17, width: 7 },
+            { name: "royal",   heightFrac: 0.08, width: 5  }
+        ];
     }
-
-    const sailScale = (totalHeight / 600) * 0.55 + (hullLength / 1000) * 0.45;
-    const sailData = enabled.map(name => {
-        const widthRatio = RIG_CONSTANTS.square.baseWidthRatios[name];
-        const aspect = RIG_CONSTANTS.square.aspectRatios[name];
-        const width = hullLength * widthRatio * sailScale;
-        return { name, width, height: width / aspect };
-    });
-
-    const baseGap = Math.max(18, hullHeight * 0.12);
-    let currentBottom = weatherDeckY - Math.max(28, hullHeight * 0.18);
-    const yards = [];
-
-    for (const s of sailData) {
-        const y = currentBottom - s.height;
-        yards.push({ name: s.name, y, width: s.width, height: s.height });
-        currentBottom = y - baseGap;
-    }
-
-    const topY = yards.length ? yards[yards.length - 1].y : weatherDeckY - totalHeight * 0.55;
-    const mastTopY = topY - Math.max(24, hullHeight * 0.10);
-    const actualHeight = weatherDeckY - mastTopY;
-
-    const lowerRatio = sails.royal ? 0.48 : 0.55;
-    const topmastRatio = sails.royal ? 0.27 : 0.30;
-    const topgRatio = sails.royal ? 0.17 : 0.15;
-    const royalRatio = sails.royal ? 0.08 : 0;
 
     const mastScale = Math.max(0.7, hullLength / 900);
-    const lowerW = 12 * mastScale;
-    const topmastW = 9 * mastScale;
-    const topgW = 7 * mastScale;
-    const royalW = 5 * mastScale;
-
-    let y = weatherDeckY;
     const segments = [];
-
-    const lowerH = actualHeight * lowerRatio;
-    segments.push({ name: "lower", yTop: y - lowerH, yBottom: y, width: lowerW });
-    y -= lowerH;
-
-    const topmastH = actualHeight * topmastRatio;
-    segments.push({ name: "topmast", yTop: y - topmastH, yBottom: y, width: topmastW });
-    y -= topmastH;
-
-    if (sails.topgallant || sails.royal) {
-        const topgH = actualHeight * topgRatio;
-        segments.push({ name: "topgallant", yTop: y - topgH, yBottom: y, width: topgW });
-        y -= topgH;
+    let y = weatherDeckY;
+    for (const def of segDefs) {
+        const h = totalHeight * def.heightFrac;
+        segments.push({
+            name: def.name,
+            yTop: y - h,
+            yBottom: y,
+            width: def.width * mastScale
+        });
+        y -= h;
     }
 
-    if (sails.royal) {
-        const royalH = actualHeight * royalRatio;
-        segments.push({ name: "royal", yTop: y - royalH, yBottom: y, width: royalW });
+    // ---- Sail dimensions and repositioning ----
+    const yards = [];
+    if (sailCount > 0) {
+        const sailScale = (totalHeight / 600) * 0.55 + (hullLength / 1000) * 0.45;
+        const sailData = enabled.map(name => {
+            const wRatio = RIG_CONSTANTS.square.baseWidthRatios[name];
+            const aspect = RIG_CONSTANTS.square.aspectRatios[name];
+            const width = hullLength * wRatio * sailScale;
+            return { name, width, height: width / aspect };
+        });
+
+        const minGap = Math.max(12, hullHeight * 0.08);
+        const topClearance = Math.max(14, hullHeight * 0.06);
+
+        // ----- Deck clearance (20% of hull height + belly allowance) -----
+        const baseFootClearance = hullHeight * 0.20;           // desired distance from deck to bottom edge (straight)
+        const courseBelly = sailData[0].height * 0.10;        // extra downward bulge of the course sail
+        const effectiveFootClearance = baseFootClearance + courseBelly; // distance from deck to lowest point of course
+
+        const totalSailHeights = sailData.reduce((sum, s) => sum + s.height, 0);
+        const totalGaps = (sailCount - 1) * minGap;
+        const requiredStack = totalSailHeights + totalGaps;
+
+        const availableFromDeck = weatherDeckY - effectiveFootClearance - mastTopY - topClearance;
+
+        let startFootY;   // top of course (where the yard sits) – we'll place the course sail's yard below this
+        let gaps;
+
+        if (requiredStack <= availableFromDeck) {
+            // Stack fits comfortably – place course foot as low as allowed, spread extra as larger gaps
+            startFootY = weatherDeckY - effectiveFootClearance;
+            const slack = availableFromDeck - requiredStack;
+            const extraPerGap = sailCount > 1 ? slack / (sailCount - 1) : 0;
+            gaps = sailData.map((_, i) => (i < sailCount - 1) ? minGap + extraPerGap : 0);
+        } else {
+            // Stack is too tall – keep minimum gaps, raise the whole stack so top yard fits under masthead
+            startFootY = weatherDeckY - effectiveFootClearance;
+            const actualTop = startFootY - requiredStack;
+            if (actualTop < mastTopY + topClearance) {
+                startFootY = mastTopY + topClearance + requiredStack;
+            }
+            gaps = sailData.map((_, i) => (i < sailCount - 1) ? minGap : 0);
+        }
+
+        // Build yards from the top of the course down (or rather we build from foot upward)
+        let footY = startFootY;   // y‑coordinate of the bottom of the course (i.e., the foot)
+        for (let i = 0; i < sailData.length; i++) {
+            const s = sailData[i];
+            const yardY = footY - s.height;
+            yards.push({
+                name: s.name,
+                y: yardY,
+                width: s.width,
+                height: s.height
+            });
+            if (i < sailCount - 1) {
+                footY = yardY - gaps[i];
+            }
+        }
     }
 
     return { segments, yards, mastTopY };
 }
 
-// =====================================================
-// DEFAULT MAST SEGMENTS (for non‑square rigs)
-// =====================================================
-function computeDefaultMastSegments(totalHeight, weatherDeckY, hullHeight) {
-    let segments = [];
-    let remaining = totalHeight;
-    let lowerHeight = remaining * 0.55;
-    let topmastHeight = remaining * 0.30;
-    let topgallantHeight = remaining * 0.15;
+// -------------------------------------------------------
+function buildGaffMast(totalHeight, gaffConf, weatherDeckY, hullLength) {
+    const mastTopY = weatherDeckY - totalHeight;
+    const mastScale = Math.max(0.7, hullLength / 900);
+    let segments;
+    if (gaffConf.hasSquareTopsail) {
+        const lowerH = totalHeight * 0.75;
+        const topmastH = totalHeight * 0.25;
+        segments = [
+            { name: "lower",   yTop: weatherDeckY - lowerH, yBottom: weatherDeckY, width: 12 * mastScale },
+            { name: "topmast", yTop: weatherDeckY - lowerH - topmastH, yBottom: weatherDeckY - lowerH, width: 9 * mastScale }
+        ];
+    } else {
+        // single segment (lower only)
+        segments = [
+            { name: "lower", yTop: mastTopY, yBottom: weatherDeckY, width: 12 * mastScale }
+        ];
+    }
+    return { segments, yards: [], mastTopY };
+}
 
-    let y = weatherDeckY;
-    segments.push({ name: "lower", yTop: y - lowerHeight, yBottom: y, width: 12 });
-    y -= lowerHeight;
-    segments.push({ name: "topmast", yTop: y - topmastHeight, yBottom: y, width: 9 });
-    y -= topmastHeight;
-    segments.push({ name: "topgallant", yTop: y - topgallantHeight, yBottom: y, width: 7 });
-
-    return { segments, yards: [], mastTopY: segments[segments.length - 1].yTop };
+// -------------------------------------------------------
+function buildLateenMast(totalHeight, weatherDeckY, hullLength) {
+    const mastScale = Math.max(0.7, hullLength / 900);
+    const lowerH   = totalHeight * 0.55;
+    const topmastH = totalHeight * 0.30;
+    const topgH    = totalHeight * 0.15;
+    const segments = [
+        { name: "lower",      yTop: weatherDeckY - lowerH, yBottom: weatherDeckY, width: 12 * mastScale },
+        { name: "topmast",    yTop: weatherDeckY - lowerH - topmastH, yBottom: weatherDeckY - lowerH, width: 9 * mastScale },
+        { name: "topgallant", yTop: weatherDeckY - lowerH - topmastH - topgH, yBottom: weatherDeckY - lowerH - topmastH, width: 7 * mastScale }
+    ];
+    const mastTopY = weatherDeckY - totalHeight;
+    return { segments, yards: [], mastTopY };
 }
 
 // =====================================================
@@ -107,7 +165,7 @@ function computeDefaultMastSegments(totalHeight, weatherDeckY, hullHeight) {
 function buildShipGeometry() {
     const preset = HULL_PRESETS[state.hullSize];
 
-    // Base length
+    // ---- hull length ----
     let hullLength = preset.baseLength;
     hullLength += state.hullStructures.gunDecks * 120;
     hullLength += state.armament.gunPortsLower * 5;
@@ -117,11 +175,10 @@ function buildShipGeometry() {
     if (state.rig.mastCount === 3) hullLength += 70;
     hullLength = Math.min(1320, hullLength);
 
-    // Bowsprit
     let bowspritLength = Math.round(hullLength * 0.22);
     if (state.bowspritType === "none") bowspritLength = 0;
 
-    // Auto scale to fit canvas
+    // fit canvas
     const totalProjectedWidth = hullLength + bowspritLength + 40;
     const availableWidth = CANVAS_WIDTH - SIDE_MARGIN * 2;
     const scale = Math.min(1, availableWidth / totalProjectedWidth);
@@ -132,7 +189,7 @@ function buildShipGeometry() {
     const bowX = ((CANVAS_WIDTH - totalCenteredWidth) / 2) + bowspritLength;
     const sternX = bowX + hullLength;
 
-    // Height
+    // ---- height ----
     let ratio = preset.baseRatio + state.hullStructures.gunDecks * 0.012;
     ratio = Math.min(0.15, Math.max(0.10, ratio));
     let hullHeight = hullLength * ratio;
@@ -141,19 +198,19 @@ function buildShipGeometry() {
     const weatherDeckY = keelY - hullHeight;
     const waterlineY = keelY - hullHeight * 0.4;
 
-    // Flat deck boundaries
+    // deck boundaries
     const flatDeckStart = bowX + 175 * scale;
     const flatDeckEnd = sternX - 215 * scale;
     const bowFairX = flatDeckStart;
     const sternFairX = flatDeckEnd;
 
-    // Gun deck Y positions
+    // gun deck Ys
     const gunDeckYs = [];
     for (let i = 0; i < state.hullStructures.gunDecks; i++) {
         gunDeckYs.push(weatherDeckY + 38 + i * 44);
     }
 
-    // Mast positions
+    // mast positions
     const mastRatios = (() => {
         if (state.rig.mastCount === 1) return [0.48];
         if (state.rig.mastCount === 2) return [0.36, 0.65];
@@ -161,35 +218,55 @@ function buildShipGeometry() {
     })();
     const mastPositions = mastRatios.map(r => bowX + r * hullLength);
 
-    // Mast heights
-    const baseMainHeight = hullLength * preset.mastHeightFactor;
+    // base mast height
+    const baseMastHeight = hullLength * preset.mastHeightFactor;
+
     const mastTotals = [];
     for (let i = 0; i < mastPositions.length; i++) {
         const conf = state.masts[i];
-        const rigPower = computeRigPower(conf);
-        let totalH = baseMainHeight * (0.42 + rigPower * 0.33);
-        if (i === 0) totalH *= 0.93;
-        if (i === 2) {
-            if (conf.type === "square") totalH *= 0.82;
-            else if (conf.type === "gaff") totalH *= 0.92;
-            else if (conf.type === "lateen") totalH *= 0.96;
+        let sailFactor;
+        if (conf.type === "square") {
+            const cnt = (conf.squareSails.course?1:0) + (conf.squareSails.topsail?1:0) +
+                        (conf.squareSails.topgallant?1:0) + (conf.squareSails.royal?1:0);
+            if (cnt === 0) sailFactor = 0.60;
+            else if (cnt === 1) sailFactor = 0.70;
+            else if (cnt === 4) sailFactor = 1.15;
+            else sailFactor = 1.00; // 2 or 3
+        } else if (conf.type === "gaff") {
+            sailFactor = (conf.gaff.hasGaff && conf.gaff.hasSquareTopsail) ? 1.00 :
+                         (conf.gaff.hasGaff ? 0.70 : 0.70);
+        } else { // lateen
+            sailFactor = 1.00;
         }
-        if (state.hullSize === "veryLarge") totalH *= 1.08;
-        if (state.hullSize === "small") totalH *= 0.92;
-        mastTotals.push(totalH);
+
+        let posFactor = 1.0;
+        if (i === 0) posFactor = 0.93;
+        else if (i === 2) {
+            if (conf.type === "square") posFactor = 0.82;
+            else if (conf.type === "gaff") posFactor = 0.92;
+            else posFactor = 0.96;
+        }
+
+        let hullMod = 1.0;
+        if (state.hullSize === "veryLarge") hullMod = 1.08;
+        if (state.hullSize === "small") hullMod = 0.92;
+
+        mastTotals.push(baseMastHeight * posFactor * sailFactor * hullMod);
     }
 
-    // Build mast data
+    // ---- build mast data ----
     const mastData = [];
     for (let i = 0; i < mastPositions.length; i++) {
         const mastX = mastPositions[i];
-        const conf = state.masts[i];
         const totalH = mastTotals[i];
-        let segs;
+        const conf = state.masts[i];
+        let builderResult;
         if (conf.type === "square") {
-            segs = computeSquareMastSegments(totalH, conf.squareSails, weatherDeckY, hullHeight, hullLength);
+            builderResult = buildSquareMast(totalH, conf.squareSails, weatherDeckY, hullLength, hullHeight);
+        } else if (conf.type === "gaff") {
+            builderResult = buildGaffMast(totalH, conf.gaff, weatherDeckY, hullLength);
         } else {
-            segs = computeDefaultMastSegments(totalH, weatherDeckY, hullHeight);
+            builderResult = buildLateenMast(totalH, weatherDeckY, hullLength);
         }
         mastData.push({
             x: mastX,
@@ -197,24 +274,23 @@ function buildShipGeometry() {
             rigType: conf.type,
             squareSails: conf.squareSails,
             gaff: conf.gaff,
-            segments: segs.segments,
-            yards: segs.yards,
-            mastTopY: segs.mastTopY
+            segments: builderResult.segments,
+            yards: builderResult.yards,
+            mastTopY: builderResult.mastTopY
         });
     }
 
-    // Bowsprit geometry
+    // bowsprit
     const bspritLen = bowspritLength;
     const bspritRootX = bowX + 12;
     const bspritRootY = weatherDeckY - 8;
     const bspritTipX = Math.max(SIDE_MARGIN * 0.4, bspritRootX - bspritLen);
     const bspritTipY = bspritRootY - Math.round(bspritLen * 0.46);
 
-    // Deck structures
+    // deck structures
     const fcH = Math.max(18, Math.round(hullHeight * 0.12));
     const forecastle = state.hullStructures.forecastle ? {
-        x: bowX + 12,
-        y: weatherDeckY - fcH,
+        x: bowX + 12, y: weatherDeckY - fcH,
         width: Math.min(hullLength * 0.18, flatDeckEnd - (bowX + 12) - 20),
         height: fcH
     } : null;
@@ -222,10 +298,8 @@ function buildShipGeometry() {
     const qdH = Math.max(22, Math.round(hullHeight * 0.14));
     let qdWidth = Math.min(hullLength * 0.27, flatDeckEnd - flatDeckStart - 20);
     const quarterdeck = state.hullStructures.quarterdeck ? {
-        x: sternX - qdWidth - 5,
-        y: weatherDeckY - qdH,
-        width: qdWidth,
-        height: qdH
+        x: sternX - qdWidth - 5, y: weatherDeckY - qdH,
+        width: qdWidth, height: qdH
     } : null;
 
     const poopDeck = (state.hullStructures.poopDeck && quarterdeck) ? {
@@ -238,59 +312,42 @@ function buildShipGeometry() {
     const bowSheer = Math.min(preset.bowSheer, hullHeight * 0.12);
     const sternSheer = Math.min(preset.sternSheer, hullHeight * 0.22);
 
-    // ----- Staysail geometry -----
+    // staysails (unchanged)
     const staysailsData = [];
-
-    // Helpers that rely on mastData being fully built
     const lowerTop = (m) => m.segments[0]?.yTop;
     const topmastTop = (m) => m.segments.length > 1 ? m.segments[1].yTop : lowerTop(m) - 50;
 
     if (mastData.length >= 2) {
-        // Main staysail: foot at foremast base, head at main lower hounds
         if (canHaveMainStaysail()) {
             staysailsData.push({
                 type: "mainStaysail",
-                footX: mastData[0].x,
-                footY: weatherDeckY,
-                headX: mastData[1].x,
-                headY: lowerTop(mastData[1]),
+                footX: mastData[0].x, footY: weatherDeckY,
+                headX: mastData[1].x, headY: lowerTop(mastData[1]),
                 depth: (lowerTop(mastData[1]) - weatherDeckY) * 0.25
             });
         }
-
-        // Main topmast staysail: foot at fore lower hounds, head at main topmast head
         if (canHaveMainTopmastStaysail()) {
             staysailsData.push({
                 type: "mainTopmastStaysail",
-                footX: mastData[0].x,
-                footY: lowerTop(mastData[0]),
-                headX: mastData[1].x,
-                headY: topmastTop(mastData[1]),
+                footX: mastData[0].x, footY: lowerTop(mastData[0]),
+                headX: mastData[1].x, headY: topmastTop(mastData[1]),
                 depth: (topmastTop(mastData[1]) - lowerTop(mastData[0])) * 0.25
             });
         }
-
         if (mastData.length === 3) {
-            // Mizzen staysail: foot at mainmast base, head at mizzen lower hounds
             if (canHaveMizzenStaysail()) {
                 staysailsData.push({
                     type: "mizzenStaysail",
-                    footX: mastData[1].x,
-                    footY: weatherDeckY,
-                    headX: mastData[2].x,
-                    headY: lowerTop(mastData[2]),
+                    footX: mastData[1].x, footY: weatherDeckY,
+                    headX: mastData[2].x, headY: lowerTop(mastData[2]),
                     depth: (lowerTop(mastData[2]) - weatherDeckY) * 0.25
                 });
             }
-
-            // Mizzen topmast staysail: foot at main lower hounds, head at mizzen topmast head
             if (canHaveMizzenTopmastStaysail()) {
                 staysailsData.push({
                     type: "mizzenTopmastStaysail",
-                    footX: mastData[1].x,
-                    footY: lowerTop(mastData[1]),
-                    headX: mastData[2].x,
-                    headY: topmastTop(mastData[2]),
+                    footX: mastData[1].x, footY: lowerTop(mastData[1]),
+                    headX: mastData[2].x, headY: topmastTop(mastData[2]),
                     depth: (topmastTop(mastData[2]) - lowerTop(mastData[1])) * 0.25
                 });
             }
