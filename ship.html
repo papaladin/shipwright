@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>⚓ Shipwright – Segmented Masts + Scalable Square-Rig Height</title>
+<link rel="stylesheet" href="ship.css">
+</head>
+<body>
+
+<div class="shipbuilder">
+
+    <div class="controls-panel">
+
+        <div class="control-group">
+            <h3>📐 Hull & Deck Structures</h3>
+
+            <div class="row">
+                <label>Hull size:</label>
+                <select id="hullSize">
+                    <option value="small">Small (cutter / sloop)</option>
+                    <option value="medium" selected>Medium (brig / schooner)</option>
+                    <option value="large">Large (frigate)</option>
+                    <option value="veryLarge">Very Large (ship of the line)</option>
+                </select>
+            </div>
+
+            <div class="row">
+                <label>Gun decks:</label>
+                <div id="gunDecksStepper"></div>
+            </div>
+
+            <div class="row">
+                <label><input type="checkbox" id="forecastleCheck" checked> Forecastle</label>
+                <label><input type="checkbox" id="quarterdeckCheck" checked> Quarterdeck</label>
+                <label><input type="checkbox" id="poopDeckCheck"> Poop deck</label>
+            </div>
+
+            <div class="row">
+                <label><input type="checkbox" id="sternGalleryCheck" checked> Stern gallery</label>
+                <label><input type="checkbox" id="hullWindowsCheck"> Lower hull windows</label>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>🔫 Armament</h3>
+            <div id="gunPortsPanel"></div>
+        </div>
+
+        <div class="control-group">
+            <h3>⛵ Rigging</h3>
+
+            <div class="row">
+                <label>Masts:</label>
+                <div id="mastCountStepper"></div>
+            </div>
+
+            <div id="mastRiggingContainer"></div>
+
+            <div class="mast-detail-card">
+                <div class="row">
+                    <label>Bowsprit:</label>
+                    <select id="bowspritType">
+                        <option value="jib">Single Jib</option>
+                        <option value="twoJibs">Two Jibs</option>
+                        <option value="squareSpritsail">Spritsail</option>
+                        <option value="none">None</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Staysails (live) -->
+            <div id="staysailsPanel" class="mast-detail-card">
+                <!-- dynamically filled by ship-ui.js -->
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>🎨 Colors</h3>
+
+            <div class="row">
+                <label>Hull</label>
+                <input type="color" id="hullColor" value="#7C4A2A">
+                <label>Sails</label>
+                <input type="color" id="sailColor" value="#F7E9CD">
+                <label>Decks</label>
+                <input type="color" id="deckColor" value="#C29A6B">
+                <label>Gun ports</label>
+                <input type="color" id="gunPortColor" value="#3E2C1A">
+            </div>
+        </div>
+
+        <div class="control-group disabled-group">
+            <h3>🏴 Flags <span class="badge">coming soon</span></h3>
+            <p style="color:#888; font-size:0.85rem;">Custom flags and pennants will be available in a future update.</p>
+        </div>
+    </div>
+
+    <div class="ship-canvas-area">
+        <div class="svg-wrapper">
+            <svg id="shipSvg" viewBox="0 0 1500 1200"></svg>
+        </div>
+    </div>
+</div>
+
+<script src="ship-config.js"></script>
+<script src="ship-geometry.js"></script>
+<script src="ship-render.js"></script>
+<script src="ship-ui.js"></script>
+</body>
+</html>
