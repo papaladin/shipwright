@@ -140,7 +140,7 @@ function drawTriangularSail(tackX, tackY, headX, headY, clewX, clewY, sailColor)
 }
 
 // =====================================================
-// STANDING RIGGING
+// STANDING RIGGING (stays, shrouds, ratlines, backstays)
 // =====================================================
 function drawStandingRigging(geo) {
     const { mastData, weatherDeckY, hullLength, bspritTipX, bspritTipY, sternX } = geo;
@@ -683,56 +683,49 @@ function drawCabinsAndGallery(geo) {
     }
 }
 
+// =====================================================
+// MASTS & SAILS (with corrected depth order)
+// =====================================================
 function drawMastsAndSails(geo) {
     const { mastData, weatherDeckY, keelY, bspritRootX, bspritRootY, bspritTipX, bspritTipY, staysailsData } = geo;
     const sailColor = state.appearance.sailColor;
     const mastBotY = keelY - 22;
 
+    // ── 1. Bowsprit spar (unchanged) ──
     if (state.bowspritType !== "none") {
         onto("mastLayer", el("line", { x1: bspritRootX, y1: bspritRootY, x2: bspritTipX, y2: bspritTipY, stroke: "#6f4a2c", "stroke-width": "10" }));
         onto("riggingLayer", el("line", { x1: bspritTipX, y1: bspritTipY, x2: bspritRootX+5, y2: weatherDeckY+18, stroke: "#7a6a52", "stroke-width": "1.5", opacity: "0.8" }));
     }
 
-    const foreTopY = mastData[0]?.mastTopY ?? weatherDeckY - 220;
-    const foreTopX = mastData[0]?.x ?? (bspritRootX + 100);
-    const bspritSpan  = foreTopX - bspritRootX;
-    const jibClewX    = bspritRootX + bspritSpan * 0.38;
-    const jibClewY    = weatherDeckY - 75;
-
-    if (state.bowspritType === "jib") {
-        drawTriangularSail(bspritTipX, bspritTipY, foreTopX - 12, foreTopY + 28, jibClewX, jibClewY, sailColor);
-    } else if (state.bowspritType === "twoJibs") {
-        drawTriangularSail(bspritTipX, bspritTipY, foreTopX - 12, foreTopY + 28, jibClewX, jibClewY, sailColor);
-        const mx = Math.round((bspritTipX + bspritRootX) / 2);
-        const my = Math.round((bspritTipY + bspritRootY) / 2);
-        const foreLowerTopY = mastData[0]?.segments[0]?.yTop ?? (foreTopY + 200);
-        const innerClewX = bspritRootX + bspritSpan * 0.52;
-        const innerClewY = weatherDeckY - 90;
-        drawTriangularSail(mx, my, foreTopX, foreLowerTopY + 25, innerClewX, innerClewY, sailColor);
-    } else if (state.bowspritType === "squareSpritsail") {
-        const sx = Math.round(bspritRootX + (bspritTipX-bspritRootX)*0.65);
-        const sy = Math.round(bspritRootY + (bspritTipY-bspritRootY)*0.65);
-        const spritW = 100, spritH = 85;
-        const tilt = spritH * 0.15;
-        const hw = spritW / 2;
-        const leftX = sx - hw;
-        const rightX = sx + hw;
-        const topLeftY = sy - tilt;
-        const topRightY = sy + tilt;
-        onto("riggingLayer", el("line", { x1: leftX - 10, y1: topLeftY, x2: rightX + 10, y2: topRightY, stroke: "#7a5330", "stroke-width": "4" }));
-        onto("sailLayer", el("path", { d: curvedSailPath(sx, sy, spritW, spritH, tilt), fill: sailColor, stroke: "#b18753", "stroke-width": "1.5" }));
+    // ── 2. Mast bases (into the hull) – drawn FIRST, into mastBaseLayer ──
+    for (const mast of mastData) {
+        onto("mastBaseLayer", el("line", {
+            x1: mast.x, y1: weatherDeckY,
+            x2: mast.x, y2: mastBotY,
+            stroke: "#5e3e1c", "stroke-width": "13"
+        }));
     }
 
-    for (let idx = 0; idx < mastData.length; idx++) {
+    // ── 3. Masts from stern to bow: mizzen → main → fore ──
+    // We must draw segments and yards in mastLayer, and sails in sailLayer.
+    // For square rig, draw yards from top to bottom within each mast (so lower sail overlaps upper).
+    const mastOrder = [2, 1, 0].filter(i => i < mastData.length); // mizzen first, fore last
+    const drawnStaysailTypes = new Set();  // prevent drawing the same staysail twice
+
+    for (const idx of mastOrder) {
         const mast = mastData[idx];
         const mastX = mast.x;
         const rigType = mast.rigType;
 
+        // Mast segments (above deck)
         for (const seg of mast.segments) {
-            onto("mastLayer", el("line", { x1: mastX, y1: seg.yBottom, x2: mastX, y2: seg.yTop, stroke: "#6b4a28", "stroke-width": seg.width, "stroke-linecap": "round" }));
+            onto("mastLayer", el("line", {
+                x1: mastX, y1: seg.yBottom, x2: mastX, y2: seg.yTop,
+                stroke: "#6b4a28", "stroke-width": seg.width, "stroke-linecap": "round"
+            }));
         }
-        onto("mastLayer", el("line", { x1: mastX, y1: weatherDeckY, x2: mastX, y2: mastBotY, stroke: "#5e3e1c", "stroke-width": "13" }));
 
+        // Yard & sail drawing
         if (rigType === "square") {
             // draw from top to bottom so course (lowest) overlaps upper sails
             for (let yi = mast.yards.length - 1; yi >= 0; yi--) {
@@ -768,8 +761,8 @@ function drawMastsAndSails(geo) {
                 const peakLength = mastH * 0.42;
                 const peakX      = mastX + peakLength;
                 const peakY      = throatY - peakLength * 0.38;
-                onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX, y2: peakY, stroke: "#7a5330", "stroke-width": "5" }));
-                onto("riggingLayer", el("line", { x1: mastX, y1: boomY, x2: boomEndX, y2: boomEndY, stroke: "#7a5330", "stroke-width": "5" }));
+                onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX,    y2: peakY,    stroke: "#7a5330", "stroke-width": "5" }));
+                onto("riggingLayer", el("line", { x1: mastX, y1: boomY,   x2: boomEndX, y2: boomEndY, stroke: "#7a5330", "stroke-width": "5" }));
                 const leechLen   = Math.hypot(boomEndX - peakX, boomEndY - peakY);
                 const leechCtrlX = (peakX + boomEndX) / 2 + leechLen * 0.14;
                 const leechCtrlY = (peakY + boomEndY) / 2;
@@ -833,35 +826,78 @@ function drawMastsAndSails(geo) {
                 onto("sailLayer", el("path", { d: `M ${sx1} ${sy1} Q ${mx} ${my} ${sx2} ${sy2}`, fill: "none", stroke: "#d8c09a", "stroke-width": "0.9", opacity: "0.55" }));
             }
         }
-    }
 
-    drawStandingRigging(geo);
-
-    if (staysailsData && staysailsData.length > 0) {
-        for (const ss of staysailsData) {
-            if (state.rig.staysails[ss.type] === true) {
-                drawTriangularSail(ss.tackX, ss.tackY, ss.headX, ss.headY, ss.clewX, ss.clewY, sailColor);
+        // After each mast's sails, draw the staysails that belong to that mast's position
+        // For mizzen (idx=2): draw mizzenStaysail, mizzenTopmastStaysail
+        // For main (idx=1): draw mainStaysail, mainTopmastStaysail
+        // Fore (idx=0): none
+        if (staysailsData && staysailsData.length > 0) {
+            const targetTypes = [];
+            if (idx === 2) targetTypes.push("mizzenStaysail", "mizzenTopmastStaysail");
+            else if (idx === 1) targetTypes.push("mainStaysail", "mainTopmastStaysail");
+            for (const ss of staysailsData) {
+                if (targetTypes.includes(ss.type) && !drawnStaysailTypes.has(ss.type)) {
+                    if (state.rig.staysails[ss.type] === true) {
+                        drawTriangularSail(ss.tackX, ss.tackY, ss.headX, ss.headY, ss.clewX, ss.clewY, sailColor);
+                    }
+                    drawnStaysailTypes.add(ss.type);
+                }
             }
         }
     }
+
+    // ── 4. Bowsprit sails (jib / spritsail) come LAST, in front of everything ──
+    const foreTopY = mastData[0]?.mastTopY ?? weatherDeckY - 220;
+    const foreTopX = mastData[0]?.x ?? (bspritRootX + 100);
+    const bspritSpan  = foreTopX - bspritRootX;
+    const jibClewX    = bspritRootX + bspritSpan * 0.38;
+    const jibClewY    = weatherDeckY - 75;
+
+    if (state.bowspritType === "jib") {
+        drawTriangularSail(bspritTipX, bspritTipY, foreTopX - 12, foreTopY + 28, jibClewX, jibClewY, sailColor);
+    } else if (state.bowspritType === "twoJibs") {
+        drawTriangularSail(bspritTipX, bspritTipY, foreTopX - 12, foreTopY + 28, jibClewX, jibClewY, sailColor);
+        const mx = Math.round((bspritTipX + bspritRootX) / 2);
+        const my = Math.round((bspritTipY + bspritRootY) / 2);
+        const foreLowerTopY = mastData[0]?.segments[0]?.yTop ?? (foreTopY + 200);
+        const innerClewX = bspritRootX + bspritSpan * 0.52;
+        const innerClewY = weatherDeckY - 90;
+        drawTriangularSail(mx, my, foreTopX, foreLowerTopY + 25, innerClewX, innerClewY, sailColor);
+    } else if (state.bowspritType === "squareSpritsail") {
+        const sx = Math.round(bspritRootX + (bspritTipX-bspritRootX)*0.65);
+        const sy = Math.round(bspritRootY + (bspritTipY-bspritRootY)*0.65);
+        const spritW = 100, spritH = 85;
+        const tilt = spritH * 0.15;
+        const hw = spritW / 2;
+        const leftX = sx - hw;
+        const rightX = sx + hw;
+        const topLeftY = sy - tilt;
+        const topRightY = sy + tilt;
+        onto("riggingLayer", el("line", { x1: leftX - 10, y1: topLeftY, x2: rightX + 10, y2: topRightY, stroke: "#7a5330", "stroke-width": "4" }));
+        onto("sailLayer", el("path", { d: curvedSailPath(sx, sy, spritW, spritH, tilt), fill: sailColor, stroke: "#b18753", "stroke-width": "1.5" }));
+    }
+
+    // ── 5. Standing rigging (stays, shrouds, backstays) – behind sails but after masts ──
+    drawStandingRigging(geo);
 }
 
 function drawShip() {
     try {
         clearSVG();
         getDefs();
-        // Back-to-front layer order:
-        addLayer("hullLayer");        // hull, planks, wales, copper, railing
-        addLayer("deckLayer");        // deck structures, castles, details
-        addLayer("armamentLayer");    // gun ports
-        addLayer("mastLayer");        // masts (behind sails)
-        addLayer("riggingLayer");     // shrouds, stays, ratlines, yards
-        addLayer("sailLayer");        // sails
-        addLayer("detailLayer");      // stern gallery, windows, lantern
-        addLayer("waterLayer");       // water on top of everything
+        // Layer order (back to front):
+        addLayer("mastBaseLayer");   // mast stubs inside the hull (behind hull)
+        addLayer("hullLayer");       // hull, planks, wales, copper, railing
+        addLayer("deckLayer");       // deck structures, castles, details
+        addLayer("armamentLayer");   // gun ports
+        addLayer("mastLayer");       // mast segments (above deck)
+        addLayer("riggingLayer");    // shrouds, stays, ratlines, yards
+        addLayer("sailLayer");       // sails
+        addLayer("detailLayer");     // stern gallery, windows, lantern
+        addLayer("waterLayer");      // water on top of everything
 
         const geo = buildShipGeometry();
-        drawWater(geo);               // drawn last → appears on top
+        drawWater(geo);              // water is added last, so it appears on top
         drawHull(geo);
         drawDeckStructures(geo);
         drawGunPorts(geo);
