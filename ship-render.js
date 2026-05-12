@@ -361,12 +361,10 @@ function drawHull(geo) {
     const plankClr = darken(hullColor, 22);
     const plankLight = lighten(hullColor, 20);
     for (let py = geo.weatherDeckY + 16; py < geo.keelY + 32; py += 20) {
-        // dark seam
         interiorGrp.appendChild(el("line", {
             x1: 0, y1: py, x2: 1500, y2: py,
             stroke: plankClr, "stroke-width": "1.2", opacity: "0.5"
         }));
-        // light bevel just below
         interiorGrp.appendChild(el("line", {
             x1: 0, y1: py + 1.5, x2: 1500, y2: py + 1.5,
             stroke: plankLight, "stroke-width": "0.8", opacity: "0.35"
@@ -386,7 +384,6 @@ function drawHull(geo) {
             x1: 0, y1: wy, x2: 1500, y2: wy,
             stroke: waleColor, "stroke-width": "4.5", opacity: "0.85"
         }));
-        // thin highlight above each wale
         interiorGrp.appendChild(el("line", {
             x1: 0, y1: wy - 2, x2: 1500, y2: wy - 2,
             stroke: lighten(hullColor, 5), "stroke-width": "1", opacity: "0.5"
@@ -398,7 +395,6 @@ function drawHull(geo) {
     let shadeGrad = document.getElementById(shadeId);
     if (!shadeGrad) {
         shadeGrad = el("linearGradient", { id: shadeId, gradientTransform: "rotate(90)" });
-        // top of hull (deck) lighter, bottom (keel) darker
         shadeGrad.appendChild(el("stop", { offset: "0%", "stop-color": lighten(hullColor, 40) }));
         shadeGrad.appendChild(el("stop", { offset: "100%", "stop-color": darken(hullColor, 30) }));
         getDefs().appendChild(shadeGrad);
@@ -420,7 +416,7 @@ function drawHull(geo) {
         "stroke-width": "3.5"
     }));
 
-    // ---- 5. Deck-level dark strip (unchanged) ----
+    // ---- 5. Deck-level dark strip ----
     onto("hullLayer", el("rect", {
         x: geo.bowFairX - 8,
         y: geo.weatherDeckY,
@@ -463,58 +459,57 @@ function drawDeckStructures(geo) {
 
 function drawGunPorts(geo) {
     const { gunDeckYs, bowFairX, sternFairX } = geo;
-    const lidColor      = state.appearance.gunPortColor;   // user‑selected lid colour
-    const frameColor    = "#2a1a0c";                       // dark frame
-    const highlightColor = lighten(lidColor, 25);          // top bevel
+    const lidColor = state.appearance.gunPortColor;   // now controls the closed lid
+    const frameColor = "#2a1a0c";                     // dark wood frame
+    const highlightColor = lighten(lidColor, 30);     // bevel highlight
 
     for (let d = 0; d < state.hullStructures.gunDecks; d++) {
         const dy = gunDeckYs[d];
-        const pCnt = d === 0 ? state.armament.gunPortsLower
-                    : d === 1 ? state.armament.gunPortsUpper : 0;
+        const pCnt = d === 0 ? state.armament.gunPortsLower : (d === 1 ? state.armament.gunPortsUpper : 0);
         if (pCnt <= 0) continue;
 
         const startX = bowFairX + 22;
-        const endX   = sternFairX - 30;
-        const step   = (endX - startX) / Math.max(1, pCnt - 1);
+        const endX = sternFairX - 30;
+        const step = (endX - startX) / Math.max(1, pCnt - 1);
 
         for (let i = 0; i < pCnt; i++) {
             const px = startX + i * step;
 
-            // 1. Outer frame (dark, slightly larger)
+            // Outer frame
             onto("armamentLayer", el("rect", {
                 x: px - 10, y: dy - 9,
-                width: 20, height: 16,
+                width: 20, height: 14,
                 fill: frameColor,
                 stroke: "#0d0a06",
-                "stroke-width": "1",
+                "stroke-width": "1.2",
                 rx: "2"
             }));
 
-            // 2. Lid (user colour, covers the inner area)
+            // Lid
             onto("armamentLayer", el("rect", {
                 x: px - 8, y: dy - 7,
-                width: 16, height: 12,
+                width: 16, height: 10,
                 fill: lidColor,
-                stroke: frameColor,
+                stroke: darken(lidColor, 20),
                 "stroke-width": "1",
                 rx: "1"
             }));
 
-            // 3. Top bevel highlight (thin light line along the upper edge of the lid)
+            // Top bevel highlight
             onto("armamentLayer", el("line", {
-                x1: px - 7, y1: dy - 6.5,
-                x2: px + 7, y2: dy - 6.5,
+                x1: px - 7, y1: dy - 6,
+                x2: px + 7, y2: dy - 6,
                 stroke: highlightColor,
                 "stroke-width": "1.2",
-                opacity: "0.9"
+                opacity: "0.8"
             }));
 
-            // 4. Subtle shadow below the frame (gives depth)
+            // Subtle shadow below the frame
             onto("armamentLayer", el("rect", {
                 x: px - 10, y: dy - 3,
                 width: 20, height: 6,
-                fill: "#050302",
-                opacity: "0.35",
+                fill: "#000000",
+                opacity: "0.2",
                 rx: "1"
             }));
         }
@@ -522,21 +517,128 @@ function drawGunPorts(geo) {
 }
 
 function drawCabinsAndGallery(geo) {
-    const { sternX, weatherDeckY, sternSheer, quarterdeck, hullSize } = geo;
+    const { sternX, weatherDeckY, quarterdeck, hullSize } = geo;
+    const {
+        galleryWidth, windowCount, galleryBaseY, galleryTopY, galleryHeight,
+        windowSpacing, windowWidth, windowHeight,
+        galleryRows = 1, rowHeight = galleryHeight
+    } = geo;   // fallback to a single row if properties are missing
+
     if (state.hullStructures.sternGallery) {
-        const galY = weatherDeckY - sternSheer + 12;
-        const left = sternX - 94;
-        onto("detailLayer", el("line", { x1: left, y1: galY+24, x2: sternX-6, y2: galY+24, stroke: "#5a3e2b", "stroke-width": "3" }));
-        for (let i = 0; i < 3; i++) {
-            onto("detailLayer", el("rect", { x: left + 6 + i*28, y: galY+2, width: 16, height: 20, fill: "#F8DD9A", stroke: "#8b6942", "stroke-width": "1.5", rx: "2" }));
-        }
-        if (quarterdeck && hullSize !== "small") {
-            const gy2 = quarterdeck.y + 8;
-            for (let i = 0; i < 2; i++) {
-                onto("detailLayer", el("rect", { x: left+14 + i*30, y: gy2, width: 14, height: 16, fill: "#F0D08A", stroke: "#8b6942", "stroke-width": "1.5", rx: "2" }));
+        const galLeftX = sternX - galleryWidth;
+        const galRightX = sternX - 2;
+
+        // ---- Gallery background ----
+        onto("detailLayer", el("rect", {
+            x: galLeftX, y: galleryTopY,
+            width: galleryWidth, height: galleryHeight,
+            fill: darken(state.appearance.hullColor, 30),
+            stroke: "#3d2510",
+            "stroke-width": "2",
+            rx: "4"
+        }));
+
+        // ---- Windows (one or two rows) ----
+        const verticalGap = galleryHeight * 0.08;
+        for (let row = 0; row < galleryRows; row++) {
+            const rowTopY = galleryTopY + row * (rowHeight + (row > 0 ? verticalGap : 0));
+            const windowY = rowTopY + (rowHeight - windowHeight) / 2;
+
+            for (let i = 0; i < windowCount; i++) {
+                const wx = galLeftX + windowSpacing * (i + 1) - windowWidth / 2;
+                const wy = windowY;
+
+                // Window opening
+                onto("detailLayer", el("rect", {
+                    x: wx, y: wy,
+                    width: windowWidth, height: windowHeight,
+                    fill: "#F8DD9A",
+                    stroke: "#8b6942",
+                    "stroke-width": "1.5",
+                    rx: "2"
+                }));
+
+                // Arched top
+                const archCtrlY = wy - windowHeight * 0.2;
+                onto("detailLayer", el("path", {
+                    d: `M ${wx},${wy} Q ${wx + windowWidth / 2},${archCtrlY} ${wx + windowWidth},${wy}`,
+                    fill: "none",
+                    stroke: "#8b6942",
+                    "stroke-width": "1.5"
+                }));
+
+                // Window panes (cross)
+                onto("detailLayer", el("line", {
+                    x1: wx + windowWidth / 2, y1: wy,
+                    x2: wx + windowWidth / 2, y2: wy + windowHeight,
+                    stroke: "#8b6942", "stroke-width": "1", opacity: "0.6"
+                }));
+                onto("detailLayer", el("line", {
+                    x1: wx, y1: wy + windowHeight / 2,
+                    x2: wx + windowWidth, y2: wy + windowHeight / 2,
+                    stroke: "#8b6942", "stroke-width": "1", opacity: "0.6"
+                }));
             }
         }
+
+        // ---- Pilasters ----
+        for (let i = 0; i <= windowCount; i++) {
+            const px = galLeftX + windowSpacing * (i + 0.5);
+            onto("detailLayer", el("line", {
+                x1: px, y1: galleryTopY,
+                x2: px, y2: galleryBaseY,
+                stroke: darken(state.appearance.hullColor, 15),
+                "stroke-width": "2.5"
+            }));
+        }
+
+        // ---- Taffrail / gallery roof ----
+        const roofY = galleryTopY - 8;
+        onto("detailLayer", el("path", {
+            d: `M ${galLeftX - 10},${roofY} Q ${(galLeftX + galRightX) / 2},${roofY - 8} ${galRightX + 10},${roofY}`,
+            fill: "none",
+            stroke: "#4a3a2a",
+            "stroke-width": "3"
+        }));
+        onto("detailLayer", el("path", {
+            d: `M ${galLeftX - 10},${roofY} Q ${(galLeftX + galRightX) / 2},${roofY - 8} ${galRightX + 10},${roofY} Z`,
+            fill: darken(state.appearance.hullColor, 10),
+            stroke: "none",
+            opacity: "0.7"
+        }));
+
+        // ---- Lantern ----
+        if ((hullSize === "large" || hullSize === "veryLarge") && quarterdeck) {
+            const lanternX = (galLeftX + galRightX) / 2;
+            const lanternY = roofY - 20;
+            onto("detailLayer", el("line", {
+                x1: lanternX, y1: roofY,
+                x2: lanternX, y2: lanternY,
+                stroke: "#4a3a2a", "stroke-width": "2"
+            }));
+            onto("detailLayer", el("rect", {
+                x: lanternX - 6, y: lanternY - 10,
+                width: 12, height: 10,
+                fill: "#F0D08A",
+                stroke: "#8b6942",
+                "stroke-width": "1",
+                rx: "1"
+            }));
+            onto("detailLayer", el("rect", {
+                x: lanternX - 4, y: lanternY - 8,
+                width: 8, height: 6,
+                fill: "#FFFFCC",
+                stroke: "none",
+                opacity: "0.9"
+            }));
+            onto("detailLayer", el("polygon", {
+                points: `${lanternX - 7},${lanternY - 10} ${lanternX + 7},${lanternY - 10} ${lanternX},${lanternY - 16}`,
+                fill: "#6b4a28"
+            }));
+        }
     }
+
+    // Hull windows (unchanged)
     if (state.hullStructures.hullWindows) {
         const winY = weatherDeckY + 22;
         const wStart = geo.bowFairX + 30;
@@ -544,7 +646,14 @@ function drawCabinsAndGallery(geo) {
         const cnt = Math.min(6, Math.max(2, Math.floor((wEnd-wStart)/80)));
         const step = (wEnd - wStart) / Math.max(1, cnt-1);
         for (let i = 0; i < cnt; i++) {
-            onto("detailLayer", el("rect", { x: wStart + i*step - 7, y: winY, width: 14, height: 16, fill: "#D4B483", stroke: "#5a3e2b", "stroke-width": "1.5", rx: "2" }));
+            onto("detailLayer", el("rect", {
+                x: wStart + i*step - 7, y: winY,
+                width: 14, height: 16,
+                fill: "#D4B483",
+                stroke: "#5a3e2b",
+                "stroke-width": "1.5",
+                rx: "2"
+            }));
         }
     }
 }
@@ -554,7 +663,6 @@ function drawMastsAndSails(geo) {
     const sailColor = state.appearance.sailColor;
     const mastBotY = keelY - 22;
 
-    // Bowsprit
     if (state.bowspritType !== "none") {
         onto("mastLayer", el("line", { x1: bspritRootX, y1: bspritRootY, x2: bspritTipX, y2: bspritTipY, stroke: "#6f4a2c", "stroke-width": "10" }));
         onto("riggingLayer", el("line", { x1: bspritTipX, y1: bspritTipY, x2: bspritRootX+5, y2: weatherDeckY+18, stroke: "#7a6a52", "stroke-width": "1.5", opacity: "0.8" }));
@@ -615,7 +723,6 @@ function drawMastsAndSails(geo) {
         }));
     }
 
-    // Masts
     for (let idx = 0; idx < mastData.length; idx++) {
         const mast = mastData[idx];
         const mastX = mast.x;
@@ -788,4 +895,4 @@ function drawShip() {
     } catch (err) {
         console.error("drawShip() failed:", err);
     }
-}
+}   

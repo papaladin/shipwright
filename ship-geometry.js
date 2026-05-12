@@ -228,7 +228,6 @@ function buildShipGeometry() {
             else if (cnt === 4) sailFactor = 1.15;
             else sailFactor = 1.00; // 2 or 3
         } else if (conf.type === "gaff") {
-            // fixed redundant ternary
             sailFactor = (conf.gaff.hasGaff && conf.gaff.hasSquareTopsail) ? 1.00 : 0.70;
         } else { // lateen
             sailFactor = 1.00;
@@ -307,18 +306,39 @@ function buildShipGeometry() {
     const bowSheer = Math.min(preset.bowSheer, hullHeight * 0.12);
     const sternSheer = Math.min(preset.sternSheer, hullHeight * 0.22);
 
-    // staysails – sized for readability: tack/clew kept well above the deck,
-    // head at ~60 % of the lower-mast height so sails don't swamp the square sails.
+    // ===================  NEW: Stern gallery geometry  ===================
+    const galleryWidth = hullLength * (state.hullSize === "small" ? 0.06 :
+                                       state.hullSize === "medium" ? 0.07 : 0.08);
+    const windowCount = state.hullSize === "small" ? 1 :
+                        state.hullSize === "medium" ? 2 :
+                        state.hullSize === "large" ? 3 : 4;
+
+    const galleryTopY = (() => {
+        if (poopDeck) return poopDeck.y + poopDeck.height + 4;
+        if (quarterdeck) return quarterdeck.y + quarterdeck.height + 4;
+        return weatherDeckY - hullHeight * 0.45;
+    })();
+
+    const galleryBaseY = waterlineY + hullHeight * 0.18;
+    const galleryHeight = Math.max(30, galleryBaseY - galleryTopY);
+
+    const galleryRows = (state.hullSize === "large" || state.hullSize === "veryLarge") ? 2 : 1;
+    const verticalGap = galleryHeight * 0.08;
+    const rowHeight = (galleryHeight - verticalGap * (galleryRows - 1)) / galleryRows;
+
+    const windowSpacing = galleryWidth / (windowCount + 1);
+    const windowWidth   = windowSpacing * 0.7;
+    const windowHeight  = rowHeight * 0.55;
+    // =====================================================================
+
+    // staysails (unchanged)
     const staysailsData = [];
     const lowerTop   = (m) => m.segments[0]?.yTop;
     const topmastTop = (m) => m.segments.length > 1 ? m.segments[1].yTop : lowerTop(m) - 50;
-
-    // Point at `frac` of the way up a mast's lower section (0 = deck, 1 = crosstrees).
     const lowerMastY = (m, frac) => weatherDeckY - (weatherDeckY - lowerTop(m)) * frac;
 
     if (mastData.length >= 2) {
         if (canHaveMainStaysail()) {
-            // Tack 18 % up foremast, head 60 % up mainmast, clew 14 % up mainmast.
             staysailsData.push({
                 type: "mainStaysail",
                 tackX: mastData[0].x,       tackY: lowerMastY(mastData[0], 0.18),
@@ -327,8 +347,6 @@ function buildShipGeometry() {
             });
         }
         if (canHaveMainTopmastStaysail()) {
-            // Lives aloft: tack just below foremast crosstrees,
-            // head 65 % up mainmast topmast section, clew just below mainmast crosstrees.
             const mainTopmastH = lowerTop(mastData[1]) - topmastTop(mastData[1]);
             staysailsData.push({
                 type: "mainTopmastStaysail",
@@ -366,6 +384,10 @@ function buildShipGeometry() {
         mastData,
         forecastle, quarterdeck, poopDeck,
         bspritRootX, bspritRootY, bspritTipX, bspritTipY,
-        staysailsData
+        staysailsData,
+        // new gallery dimensions
+        galleryWidth, windowCount, galleryBaseY, galleryTopY, galleryHeight,
+        windowSpacing, windowWidth, windowHeight,
+        galleryRows, rowHeight
     };
 }
