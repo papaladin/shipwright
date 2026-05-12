@@ -22,6 +22,20 @@ function getDefs() {
     return d;
 }
 
+// -------------------------------------------------------
+// Tiny colour helpers (only used for shading)
+// -------------------------------------------------------
+function lighten(hex, amount) {
+    const clamp = n => Math.max(0, Math.min(255, n));
+    const r = clamp(parseInt(hex.slice(1, 3), 16) + amount);
+    const g = clamp(parseInt(hex.slice(3, 5), 16) + amount);
+    const b = clamp(parseInt(hex.slice(5, 7), 16) + amount);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+// Copper sheathing colour (below waterline)
+const COPPER_COLOR = "#b87333";
+
 // =====================================================
 // SAIL PATH HELPERS (shared between rig types)
 // =====================================================
@@ -74,32 +88,24 @@ function curvedLateenPath(yardBotX, yardBotY, yardTopX, yardTopY, tackX, tackY) 
     return d;
 }
 
-// drawTriangularSail replaces the old drawJib.
-// Takes explicit tack / head / clew corners and draws the sail with three
-// anatomically correct Bézier-curved edges plus faint panel seam lines.
 function drawTriangularSail(tackX, tackY, headX, headY, clewX, clewY, sailColor) {
-
-    // ---- Control points ----
-    // Luff  (tack → head): leading edge, hugs the forestay – very slight forward belly
     const luffLen  = Math.hypot(headX - tackX, headY - tackY);
     const luffMidX = (tackX + headX) / 2;
     const luffMidY = (tackY + headY) / 2;
-    const luffCtrlX = luffMidX - luffLen * 0.04;   // shift toward bow (-X)
+    const luffCtrlX = luffMidX - luffLen * 0.04;
     const luffCtrlY = luffMidY;
 
-    // Leech (head → clew): free trailing edge – moderate aft belly
     const leechLen  = Math.hypot(clewX - headX, clewY - headY);
     const leechMidX = (headX + clewX) / 2;
     const leechMidY = (headY + clewY) / 2;
-    const leechCtrlX = leechMidX + leechLen * 0.10;  // shift toward stern (+X)
+    const leechCtrlX = leechMidX + leechLen * 0.10;
     const leechCtrlY = leechMidY;
 
-    // Foot  (clew → tack): bottom edge – strongest belly, sags downward
     const footLen  = Math.hypot(tackX - clewX, tackY - clewY);
     const footMidX = (clewX + tackX) / 2;
     const footMidY = (clewY + tackY) / 2;
     const footCtrlX = footMidX;
-    const footCtrlY = footMidY + footLen * 0.20;    // shift downward (+Y)
+    const footCtrlY = footMidY + footLen * 0.20;
 
     const d = `M ${tackX},${tackY} ` +
               `Q ${luffCtrlX},${luffCtrlY} ${headX},${headY} ` +
@@ -113,9 +119,6 @@ function drawTriangularSail(tackX, tackY, headX, headY, clewX, clewY, sailColor)
         "stroke-width": "1.8"
     }));
 
-    // ---- Panel seam lines (3 horizontal cloth seams) ----
-    // Each seam connects a point on the luff curve to the corresponding point on the
-    // leech curve, progressing from just below the head down toward foot level.
     function quadPt(ax, ay, cx, cy, bx, by, t) {
         const u = 1 - t;
         return { x: u*u*ax + 2*u*t*cx + t*t*bx,
@@ -123,9 +126,7 @@ function drawTriangularSail(tackX, tackY, headX, headY, clewX, clewY, sailColor)
     }
     for (let i = 1; i <= 3; i++) {
         const t = i / 4;
-        // Luff is parameterised tack(0) → head(1), so measuring from the head: use (1-t)
         const lp = quadPt(tackX, tackY, luffCtrlX, luffCtrlY, headX, headY, 1 - t);
-        // Leech is parameterised head(0) → clew(1), so use t directly
         const rp = quadPt(headX, headY, leechCtrlX, leechCtrlY, clewX, clewY, t);
         const mx = (lp.x + rp.x) / 2 + 4;
         const my = (lp.y + rp.y) / 2 + 5;
@@ -212,7 +213,6 @@ function drawStandingRigging(geo) {
             }));
         }
 
-        // Platform only if a topmast exists
         if (topmastHeadY !== null) {
             const platformHalfWidth = hullLength * PLATFORM_HALF_WIDTH_RATIO;
             const platformY = lowerHeadY;
@@ -225,7 +225,6 @@ function drawStandingRigging(geo) {
             onto("riggingLayer", el("line", { x1: xMast + platformHalfWidth, y1: platformY-4, x2: xMast + platformHalfWidth, y2: platformY+4, stroke: "#4a3a2a", "stroke-width": "2", opacity: "0.8" }));
         }
 
-        // Lower ratlines
         const lowerLeftOuter  = xMast - lowerSpread * 1.2;
         const lowerRightOuter = xMast + lowerSpread * 1.2;
         for (let yy = lowerBaseY + 10; yy < lowerHeadY - 6; yy += RATLINE_SPACING) {
@@ -238,7 +237,6 @@ function drawStandingRigging(geo) {
             }));
         }
 
-        // Topmast shrouds
         if (topmastHeadY !== null && topmastHeadY !== lowerHeadY) {
             const topBaseY = lowerHeadY;
             const topSpread = hullLength * TOPMAST_SHROUD_SPREAD_RATIO;
@@ -269,7 +267,6 @@ function drawStandingRigging(geo) {
             }
         }
 
-        // Backstay
         const backstayHeadY = mastHeads[i].y;
         const offset = BACKSTAY_OFFSETS[i] || 100;
         const sternXPoint = sternX - offset;
@@ -323,25 +320,114 @@ function buildHullPath(geo) {
 function drawHull(geo) {
     const hullColor = state.appearance.hullColor;
     const hullPath = buildHullPath(geo);
-    onto("hullLayer", el("path", { d: hullPath, fill: hullColor, stroke: "#3d2510", "stroke-width": "3" }));
+
+    // ---- 1. Copper bottom (full hull below waterline will be covered later) ----
+    onto("hullLayer", el("path", {
+        d: hullPath,
+        fill: COPPER_COLOR,
+        stroke: "none"
+    }));
+
+    // ---- 2. Clip for the upper hull (above waterline) ----
+    const aboveWaterId = "aboveWaterClip";
+    let aboveClip = document.getElementById(aboveWaterId);
+    if (!aboveClip) {
+        aboveClip = el("clipPath", { id: aboveWaterId });
+        aboveClip.appendChild(el("rect", {
+            x: 0, y: 0,
+            width: CANVAS_WIDTH, height: geo.waterlineY
+        }));
+        getDefs().appendChild(aboveClip);
+    }
+    onto("hullLayer", el("path", {
+        d: hullPath,
+        fill: hullColor,
+        stroke: "none",
+        "clip-path": `url(#${aboveWaterId})`
+    }));
+
+    // ---- 3. Hull interior details (planks, wales, shading) ----
     const clipId = "hullClip";
-    let clip = document.getElementById(clipId);
-    if (!clip) {
-        clip = el("clipPath", { id: clipId });
-        clip.appendChild(el("path", { d: hullPath }));
-        getDefs().appendChild(clip);
+    let hullClip = document.getElementById(clipId);
+    if (!hullClip) {
+        hullClip = el("clipPath", { id: clipId });
+        hullClip.appendChild(el("path", { d: hullPath }));
+        getDefs().appendChild(hullClip);
     }
-    const plankGrp = el("g", { "clip-path": `url(#${clipId})` });
+
+    const interiorGrp = el("g", { "clip-path": `url(#${clipId})` });
+
+    // a) Plank lines (enhanced)
     const plankClr = darken(hullColor, 22);
+    const plankLight = lighten(hullColor, 20);
     for (let py = geo.weatherDeckY + 16; py < geo.keelY + 32; py += 20) {
-        plankGrp.appendChild(el("line", { x1: 0, y1: py, x2: 1500, y2: py, stroke: plankClr, "stroke-width": "1.2", opacity: "0.4" }));
+        // dark seam
+        interiorGrp.appendChild(el("line", {
+            x1: 0, y1: py, x2: 1500, y2: py,
+            stroke: plankClr, "stroke-width": "1.2", opacity: "0.5"
+        }));
+        // light bevel just below
+        interiorGrp.appendChild(el("line", {
+            x1: 0, y1: py + 1.5, x2: 1500, y2: py + 1.5,
+            stroke: plankLight, "stroke-width": "0.8", opacity: "0.35"
+        }));
     }
-    onto("hullLayer", plankGrp);
-    onto("hullLayer", el("path", { d: hullPath, fill: "none", stroke: "#3d2510", "stroke-width": "3.5" }));
+
+    // b) Wales (reinforcing bands)
+    const freeboard = geo.weatherDeckY - geo.waterlineY;
+    const waleYs = [
+        geo.weatherDeckY - freeboard * 0.22,
+        geo.weatherDeckY - freeboard * 0.52,
+        geo.weatherDeckY - freeboard * 0.78
+    ];
+    const waleColor = darken(hullColor, 35);
+    waleYs.forEach(wy => {
+        interiorGrp.appendChild(el("line", {
+            x1: 0, y1: wy, x2: 1500, y2: wy,
+            stroke: waleColor, "stroke-width": "4.5", opacity: "0.85"
+        }));
+        // thin highlight above each wale
+        interiorGrp.appendChild(el("line", {
+            x1: 0, y1: wy - 2, x2: 1500, y2: wy - 2,
+            stroke: lighten(hullColor, 5), "stroke-width": "1", opacity: "0.5"
+        }));
+    });
+
+    // c) 3D shading (vertical gradient)
+    const shadeId = "hullShadeGrad";
+    let shadeGrad = document.getElementById(shadeId);
+    if (!shadeGrad) {
+        shadeGrad = el("linearGradient", { id: shadeId, gradientTransform: "rotate(90)" });
+        // top of hull (deck) lighter, bottom (keel) darker
+        shadeGrad.appendChild(el("stop", { offset: "0%", "stop-color": lighten(hullColor, 40) }));
+        shadeGrad.appendChild(el("stop", { offset: "100%", "stop-color": darken(hullColor, 30) }));
+        getDefs().appendChild(shadeGrad);
+    }
+    interiorGrp.appendChild(el("rect", {
+        x: 0, y: geo.weatherDeckY,
+        width: CANVAS_WIDTH, height: geo.keelY - geo.weatherDeckY + 5,
+        fill: `url(#${shadeId})`,
+        opacity: "0.25"
+    }));
+
+    onto("hullLayer", interiorGrp);
+
+    // ---- 4. Hull outline (clean edge) ----
+    onto("hullLayer", el("path", {
+        d: hullPath,
+        fill: "none",
+        stroke: "#3d2510",
+        "stroke-width": "3.5"
+    }));
+
+    // ---- 5. Deck-level dark strip (unchanged) ----
     onto("hullLayer", el("rect", {
-        x: geo.bowFairX - 8, y: geo.weatherDeckY,
-        width: geo.sternFairX - geo.bowFairX + 18, height: 10,
-        fill: darken(hullColor, 28), opacity: "0.55"
+        x: geo.bowFairX - 8,
+        y: geo.weatherDeckY,
+        width: geo.sternFairX - geo.bowFairX + 18,
+        height: 10,
+        fill: darken(hullColor, 28),
+        opacity: "0.55"
     }));
 }
 
@@ -434,8 +520,6 @@ function drawMastsAndSails(geo) {
 
     const foreTopY = mastData[0]?.mastTopY ?? weatherDeckY - 220;
     const foreTopX = mastData[0]?.x ?? (bspritRootX + 100);
-    // Clew is positioned forward of the foremast and well above the deck so the
-    // sail stays compact and doesn't swamp the square sails behind it.
     const bspritSpan  = foreTopX - bspritRootX;
     const jibClewX    = bspritRootX + bspritSpan * 0.38;
     const jibClewY    = weatherDeckY - 75;
@@ -448,15 +532,12 @@ function drawMastsAndSails(geo) {
             sailColor
         );
     } else if (state.bowspritType === "twoJibs") {
-        // Outer jib: same shape
         drawTriangularSail(
             bspritTipX, bspritTipY,
             foreTopX - 12, foreTopY + 28,
             jibClewX, jibClewY,
             sailColor
         );
-        // Inner jib: tack at mid-bowsprit, head at foremast crosstrees,
-        // clew slightly further aft and higher than the outer jib's
         const mx = Math.round((bspritTipX + bspritRootX) / 2);
         const my = Math.round((bspritTipY + bspritRootY) / 2);
         const foreLowerTopY = mastData[0]?.segments[0]?.yTop ?? (foreTopY + 200);
@@ -503,7 +584,6 @@ function drawMastsAndSails(geo) {
         }
         onto("mastLayer", el("line", { x1: mastX, y1: weatherDeckY, x2: mastX, y2: mastBotY, stroke: "#5e3e1c", "stroke-width": "13" }));
 
-        // Square rig
         if (rigType === "square") {
             for (const yard of mast.yards) {
                 const tilt = yard.height * 0.08;
@@ -525,38 +605,29 @@ function drawMastsAndSails(geo) {
                     "stroke-width": "1.5"
                 }));
             }
-        }
-        // Gaff rig
-        else if (rigType === "gaff") {
+        } else if (rigType === "gaff") {
             const mastH = mast.totalHeight;
             const lowerTop = mast.segments.find(s => s.name === "lower")?.yTop || (weatherDeckY - mastH*0.55);
             if (state.masts[idx].gaff.hasGaff) {
-
-                // ---- Key coordinates ----
-                const throatY    = lowerTop + 12;                             // gaff/mast junction (top)
-                const boomY      = weatherDeckY - mastH * 0.22;               // boom/mast junction (bottom)
+                const throatY    = lowerTop + 12;
+                const boomY      = weatherDeckY - mastH * 0.22;
                 const boomLength = Math.min(geo.hullLength * 0.22, mastH * 0.72);
                 const boomEndX   = mastX + boomLength;
-                const boomEndY   = boomY - boomLength * 0.04;                 // slight upward angle on boom
+                const boomEndY   = boomY - boomLength * 0.04;
                 const peakLength = mastH * 0.42;
                 const peakX      = mastX + peakLength;
-                const peakY      = throatY - peakLength * 0.38;               // flatter gaff (~22° vs old 36°)
+                const peakY      = throatY - peakLength * 0.38;
 
-                // ---- Spars ----
                 onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX,    y2: peakY,    stroke: "#7a5330", "stroke-width": "5" }));
                 onto("riggingLayer", el("line", { x1: mastX, y1: boomY,   x2: boomEndX, y2: boomEndY, stroke: "#7a5330", "stroke-width": "5" }));
 
-                // ---- Curved sail body ----
-                // Leech (peak → clew): free edge, bellies aft (+X)
                 const leechLen   = Math.hypot(boomEndX - peakX, boomEndY - peakY);
                 const leechCtrlX = (peakX + boomEndX) / 2 + leechLen * 0.14;
                 const leechCtrlY = (peakY + boomEndY) / 2;
-                // Foot (clew → tack): slight downward belly below the boom
                 const footLen    = Math.hypot(mastX - boomEndX, boomY - boomEndY);
                 const footCtrlX  = (boomEndX + mastX) / 2;
                 const footCtrlY  = (boomEndY + boomY) / 2 + footLen * 0.06;
 
-                // Luff and gaff edges follow the spars, so they stay as straight L commands
                 const d = `M ${mastX},${throatY} ` +
                           `L ${peakX},${peakY} ` +
                           `Q ${leechCtrlX},${leechCtrlY} ${boomEndX},${boomEndY} ` +
@@ -564,7 +635,6 @@ function drawMastsAndSails(geo) {
 
                 onto("sailLayer", el("path", { d, fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
 
-                // ---- Panel seam lines (4 horizontal cloth seams) ----
                 function quadPt(ax, ay, cx, cy, bx, by, t) {
                     const u = 1 - t;
                     return { x: u*u*ax + 2*u*t*cx + t*t*bx,
@@ -572,10 +642,8 @@ function drawMastsAndSails(geo) {
                 }
                 for (let i = 1; i <= 4; i++) {
                     const t = i / 5;
-                    // Luff is straight along the mast
                     const lx = mastX;
                     const ly = throatY + (boomY - throatY) * t;
-                    // Corresponding point on the leech curve
                     const rp = quadPt(peakX, peakY, leechCtrlX, leechCtrlY, boomEndX, boomEndY, t);
                     const smx = (lx + rp.x) / 2 + 5;
                     const smy = (ly + rp.y) / 2 + 4;
@@ -611,9 +679,7 @@ function drawMastsAndSails(geo) {
                     }));
                 }
             }
-        }
-        // Lateen rig
-        else if (rigType === "lateen") {
+        } else if (rigType === "lateen") {
             const mastH = mast.totalHeight;
             const lowerTop = mast.segments.find(s => s.name === "lower")?.yTop || (weatherDeckY - mastH * 0.55);
             const topmastTop = (mast.segments[mast.segments.length - 1]?.yTop) || (weatherDeckY - mastH * 0.85);
@@ -641,10 +707,8 @@ function drawMastsAndSails(geo) {
         }
     }
 
-    // ----- DRAW STANDING RIGGING -----
     drawStandingRigging(geo);
 
-    // ----- DRAW STAYSAILS -----
     if (staysailsData && staysailsData.length > 0) {
         for (const ss of staysailsData) {
             if (state.rig.staysails[ss.type] === true) {
@@ -681,6 +745,5 @@ function drawShip() {
         drawMastsAndSails(geo);
     } catch (err) {
         console.error("drawShip() failed:", err);
-        // Optionally show a user‑friendly message on the canvas
     }
 }

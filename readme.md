@@ -112,15 +112,35 @@ Invalid staysails are automatically removed when conditions change.
 
 ---
 
-# ✨ Future Improvements
+## 🚢 Roadmap
 
-- Additional jib and staysail types
-- Flags and pennants
-- Save/load ship presets
-- Responsive SVG scaling
-- More detailed rigging
-- Geometry unit testing
-- Sails coloring (striped sails)
+- **Backend & Architecture**
+  - Add unit tests and robust input validation
+  - Modularize codebase, move off global scope, centralize constants/utilities
+  - Further cleanup: consistent coding style (e.g., Prettier, ESLint), dead code removal
+  - Strengthen error handling (UI and geometry)
+  - Explore TypeScript or JSDoc for stronger type safety
+
+- **Visual Improvements**
+  - Water: Animated SVG waves, dynamic reflections/shading
+  - Hull: Advanced plank textures and smooth hull curves
+  - Gun ports: 3D/shadowed ports, animated open/close
+  - Decks & Structures: More visible plank lines, step shading, castle enhancements, ornate rails, poop deck, windows, decorated stern gallery
+  - Responsive polish: Ensure UI and SVG look great across devices
+  - Add SVG/PNG export option
+
+- **Features**
+  - Flags/Pennants: Historical/country flag library, custom flag upload, animated waving, allow placement at different locations
+  - Sails: User-selectable stripe/cross patterns, custom color schemes
+  - Ship Presets: Famous ships and user-defined configurations; Save/load (local and optional cloud)
+  - Accessible tutorial overlays and contextual help
+
+- **Other Enhancements**
+  - Optional backend for online ship gallery and sharing
+  - Physics/animation sandbox (wind, tilt, water movement)
+  - Sidebar with historical context on ship types and rigging
+  - Possible exploration of 3D hull view (future)
+
 
 ---
 
