@@ -1,7 +1,7 @@
 # ⚓ Shipwright
 
 An interactive, historically-inspired ship builder that renders fully-rigged sailing vessels in SVG.  
-Users can configure hull size, gun decks, armament, mast count, rigging, sail plans, deck structures, and colours in real time.
+Users can configure hull size, gun decks, armament, mast count, rig type, sail plans, deck structures, staysails, and colours in real time.
 
 ---
 
@@ -15,8 +15,6 @@ No build tools, servers, or dependencies are required — the project uses plain
 
 # 🏗 Architecture Overview
 
-The application is split into six files loaded in strict order:
-
 ```text
 ship.html
  └─ ship.css
@@ -26,8 +24,7 @@ ship.html
              └─ ship-ui.js
 ```
 
-All files share a single global scope.  
-Later files may use symbols defined earlier.
+All files share a single global scope; later files may use symbols defined earlier.
 
 ---
 
@@ -35,124 +32,95 @@ Later files may use symbols defined earlier.
 
 ```text
 User input
-  → ship-ui.js
-      → syncUItoState()
-      → applyShipConstraints()
-      → rebuild UI
-      → drawShip()
+  → syncUItoState()
+  → applyShipConstraints()
+  → rebuild UI
+  → drawShip()
 ```
 
-Rules and constraints are defined exclusively in `ship-config.js`.
+All ship-combination rules are defined in `ship-config.js`.
+
+---
+
+# ✨ Features
+
+| Area | Features |
+|---|---|
+| **Hull & Deck** | 4 hull sizes, up to 2 gun decks, forecastle, quarterdeck, poop deck, stern gallery |
+| **Armament** | Configurable gun ports with automatic limits |
+| **Rigging** | 1–3 masts, square/gaff/lateen rigs, realistic sail hierarchy |
+| **Staysails** | Main, mizzen, and topmast staysails with automatic validation |
+| **Standing Rigging** | Stays, shrouds, ratlines, platforms, backstays |
+| **Visual Depth** | Tilted yards/sails, curved sail paths, quarter-view perspective |
+| **Colours** | Customisable hull, sail, deck, and gun-port colours |
+
+### Square-Rig Sail Hierarchy
+
+```text
+Course → Topsail → Topgallant → Royal
+```
 
 ---
 
 # 📁 File Responsibilities
 
-## `ship.html`
-
-Defines the DOM structure and SVG canvas.
-
-- Provides all required element IDs
-- Loads CSS and scripts in order
-- Contains no inline CSS or JavaScript
-
----
-
-## `ship.css`
-
-Handles presentation and layout only.
-
-- UI styling
-- Responsive layout
-- Stepper/button styling
-
-Contains no geometry or logic.
+| File | Purpose |
+|---|---|
+| `ship.html` | DOM structure and SVG canvas; loads all scripts |
+| `ship.css` | Layout, controls, steppers, dynamic panel styling |
+| `ship-config.js` | Global state, constants, helpers, constraints, accessor functions |
+| `ship-geometry.js` | Pure geometry computation; builds the `geo` object |
+| `ship-render.js` | SVG rendering and drawing logic |
+| `ship-ui.js` | User interaction, state sync, UI rebuilding, redraw orchestration |
 
 ---
 
-## `ship-config.js`
+# 🧠 Constraint Rules
 
-Central configuration and rules layer.
+| Rule Area | Behaviour |
+|---|---|
+| **Hull Limits** | Small hulls cannot have gun decks or poop decks |
+| **Gun Decks** | Medium hulls: max 1; Large/Very Large: max 2 |
+| **Masts** | Large/Very Large hulls require at least 2 masts |
+| **Sail Hierarchy** | Upper sails automatically enable lower sails |
+| **Royal Sails** | Only allowed on Large and Very Large hulls |
+| **Staysails** | Automatically enabled/disabled based on mast count and topmast availability |
 
-### Provides
+### Staysail Conditions
 
-- Global `state`
-- Constants (`CANVAS_WIDTH`, `KEEL_Y`, etc.)
-- Data tables (`HULL_PRESETS`, `RIG_CONSTANTS`)
-- Utility helpers (`el()`, `darken()`, `createStepper()`)
-- Constraint functions (`applyShipConstraints()`)
+| Staysail | Requirement |
+|---|---|
+| Main staysail | ≥ 2 masts |
+| Mizzen staysail | 3 masts |
+| Main topmast staysail | ≥ 2 masts + valid fore/main topmast |
+| Mizzen topmast staysail | 3 masts + valid main/mizzen topmast |
 
-### Responsibilities
-
-- Defines all ship-combination rules
-- Maintains valid state
-- Exposes limit/accessor functions for the UI
-
----
-
-## `ship-geometry.js`
-
-Pure geometry computation layer.
-
-### Provides
-
-- `buildShipGeometry()`
-- Mast and sail geometry helpers
-
-### Responsibilities
-
-- Converts `state` into a `geo` object
-- Computes hull proportions, mast placement, sail dimensions, and deck geometry
-- Contains no DOM or SVG manipulation
+Invalid staysails are automatically removed when conditions change.
 
 ---
 
-## `ship-render.js`
+# 🔧 Code Quality Improvements
 
-SVG rendering layer.
-
-### Provides
-
-- `drawShip()`
-- Hull, sail, rigging, and water drawing functions
-
-### Responsibilities
-
-- Converts `geo` into SVG elements
-- Owns all SVG DOM manipulation
-- Reads state but never modifies it
-
----
-
-## `ship-ui.js`
-
-User interaction and orchestration layer.
-
-### Provides
-
-- `updateAndDraw()`
-- UI rebuild helpers
-- State synchronisation
-
-### Responsibilities
-
-- Reads user input
-- Updates global state
-- Applies constraints
-- Rebuilds controls
-- Triggers rendering
-
-Contains no ship-rule logic.
+| Improvement | Description |
+|---|---|
+| Safer rendering | `drawShip()` wrapped in `try/catch` |
+| Cleaner constants | Extracted rigging magic numbers into named constants |
+| Better debugging | Added `console.warn()` handling in `onto()` |
+| Safer parsing | Added `parseNumericElement()` helper |
+| CSS resilience | Added fallbacks for `.squarePanel` and `.gaffPanel` |
+| Cleanup | Removed unused `estimateBeam()` |
 
 ---
 
 # ✨ Future Improvements
 
-- Staysails & flags
+- Additional jib and staysail types
+- Flags and pennants
 - Save/load ship presets
 - Responsive SVG scaling
-- User-customisable appearance themes
+- More detailed rigging
 - Geometry unit testing
+- Sails coloring (striped sails)
 
 ---
 
