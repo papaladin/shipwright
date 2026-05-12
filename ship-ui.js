@@ -1,4 +1,14 @@
 // =====================================================
+// SAFE NUMERIC PARSER (avoids NaN from stepper spans)
+// =====================================================
+function parseNumericElement(elId, fallback = 0) {
+    const el = document.getElementById(elId);
+    if (!el) return fallback;
+    const val = parseInt(el.textContent, 10);
+    return isNaN(val) ? fallback : val;
+}
+
+// =====================================================
 // SYNC STATE FROM UI
 // =====================================================
 function syncUItoState() {
@@ -11,7 +21,6 @@ function syncUItoState() {
             mast.squareSails = { course: false, topsail: false, topgallant: false, royal: false };
             mast.gaff = { hasGaff: false, hasSquareTopsail: false };
         });
-        // Also reset staysails
         state.rig.staysails = {
             mainStaysail: false,
             mizzenStaysail: false,
@@ -20,8 +29,7 @@ function syncUItoState() {
         };
     }
 
-    const gdSpan = document.getElementById("gunDecksValue");
-    state.hullStructures.gunDecks = gdSpan ? parseInt(gdSpan.textContent) || 0 : 0;
+    state.hullStructures.gunDecks = parseNumericElement("gunDecksValue", 0);
 
     state.hullStructures.forecastle = document.getElementById("forecastleCheck").checked;
     state.hullStructures.quarterdeck = document.getElementById("quarterdeckCheck").checked;
@@ -29,13 +37,10 @@ function syncUItoState() {
     state.hullStructures.sternGallery = document.getElementById("sternGalleryCheck").checked;
     state.hullStructures.hullWindows = document.getElementById("hullWindowsCheck").checked;
 
-    const lowerSpan = document.getElementById("gunPortsLowerValue");
-    state.armament.gunPortsLower = lowerSpan ? parseInt(lowerSpan.textContent) || 0 : 0;
-    const upperSpan = document.getElementById("gunPortsUpperValue");
-    state.armament.gunPortsUpper = upperSpan ? parseInt(upperSpan.textContent) || 0 : 0;
+    state.armament.gunPortsLower = parseNumericElement("gunPortsLowerValue", 0);
+    state.armament.gunPortsUpper = parseNumericElement("gunPortsUpperValue", 0);
 
-    const mcSpan = document.getElementById("mastCountValue");
-    state.rig.mastCount = mcSpan ? parseInt(mcSpan.textContent) || 1 : 1;
+    state.rig.mastCount = parseNumericElement("mastCountValue", 1);
 
     state.bowspritType = document.getElementById("bowspritType").value;
 
@@ -55,8 +60,12 @@ function rebuildGunPortsUI() {
     if (gd === 0) return;
 
     const geo = buildShipGeometry();
-    const maxLower = geo.gunDeckYs.length > 0 ? Math.floor((geo.sternFairX - geo.bowFairX - 60) / 40) : 10;
-    const maxUpper = geo.gunDeckYs.length > 1 ? Math.floor((geo.sternFairX - geo.bowFairX - 60) / 40) : 8;
+    const maxLower = geo.gunDeckYs.length > 0
+        ? Math.floor((geo.sternFairX - geo.bowFairX - 60) / 40)
+        : 10;
+    const maxUpper = geo.gunDeckYs.length > 1
+        ? Math.floor((geo.sternFairX - geo.bowFairX - 60) / 40)
+        : 8;
 
     const row1 = document.createElement('div');
     row1.className = 'row';
@@ -247,7 +256,7 @@ function updateAndDraw() {
     applyShipConstraints();
     rebuildGunPortsUI();
     rebuildMastRiggingUI();
-    rebuildStaysailsUI();        // <-- new
+    rebuildStaysailsUI();
     drawShip();
 }
 
@@ -300,5 +309,5 @@ document.getElementById("gunPortColor").addEventListener("input", updateAndDraw)
 initSteppers();
 rebuildGunPortsUI();
 rebuildMastRiggingUI();
-rebuildStaysailsUI();   // <-- new
+rebuildStaysailsUI();
 updateAndDraw();
