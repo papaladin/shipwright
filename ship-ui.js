@@ -27,6 +27,7 @@ function syncUItoState() {
             mainTopmastStaysail: false,
             mizzenTopmastStaysail: false
         };
+        // Optionally reset flags? Let's keep them as is.
     }
 
     state.hullStructures.gunDecks = parseNumericElement("gunDecksValue", 0);
@@ -48,6 +49,12 @@ function syncUItoState() {
     state.appearance.sailColor = document.getElementById("sailColor").value;
     state.appearance.deckColor = document.getElementById("deckColor").value;
     state.appearance.gunPortColor = document.getElementById("gunPortColor").value;
+
+    // Sail pattern & stripe color
+    state.appearance.sailPattern = document.getElementById("sailPattern").value;
+    state.appearance.stripeColor = document.getElementById("stripeColor").value;
+    document.getElementById("stripeColorRow").style.display =
+        state.appearance.sailPattern === "stripes" ? "flex" : "none";
 }
 
 // =====================================================
@@ -60,12 +67,8 @@ function rebuildGunPortsUI() {
     if (gd === 0) return;
 
     const geo = buildShipGeometry();
-    const maxLower = geo.gunDeckYs.length > 0
-        ? Math.floor((geo.sternFairX - geo.bowFairX - 60) / 40)
-        : 10;
-    const maxUpper = geo.gunDeckYs.length > 1
-        ? Math.floor((geo.sternFairX - geo.bowFairX - 60) / 40)
-        : 8;
+    const maxLower = geo.gunDeckYs.length > 0 ? Math.floor((geo.sternFairX - geo.bowFairX - 60) / 40) : 10;
+    const maxUpper = geo.gunDeckYs.length > 1 ? Math.floor((geo.sternFairX - geo.bowFairX - 60) / 40) : 8;
 
     const row1 = document.createElement('div');
     row1.className = 'row';
@@ -343,8 +346,6 @@ function rebuildFlagsUI() {
     });
 }
 
-
-
 // =====================================================
 // MAIN UPDATE CYCLE
 // =====================================================
@@ -385,9 +386,9 @@ function initSteppers() {
 // EVENT BINDINGS
 // =====================================================
 document.getElementById("hullSize").addEventListener("change", () => {
-    syncUItoState();              // update state.hullSize FIRST
+    syncUItoState();
     applyShipConstraints();
-    initSteppers();               // rebuild steppers with new limits
+    initSteppers();
     updateAndDraw();
 });
 document.getElementById("forecastleCheck").addEventListener("change", updateAndDraw);
@@ -400,6 +401,16 @@ document.getElementById("hullColor").addEventListener("input", updateAndDraw);
 document.getElementById("sailColor").addEventListener("input", updateAndDraw);
 document.getElementById("deckColor").addEventListener("input", updateAndDraw);
 document.getElementById("gunPortColor").addEventListener("input", updateAndDraw);
+document.getElementById("sailPattern").addEventListener("change", () => {
+    state.appearance.sailPattern = document.getElementById("sailPattern").value;
+    document.getElementById("stripeColorRow").style.display = 
+        state.appearance.sailPattern === "stripes" ? "flex" : "none";
+    updateAndDraw();
+});
+document.getElementById("stripeColor").addEventListener("input", () => {
+    state.appearance.stripeColor = document.getElementById("stripeColor").value;
+    updateAndDraw();
+});
 
 // =====================================================
 // BOOT

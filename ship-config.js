@@ -198,6 +198,8 @@ let state = {
     appearance: {
         hullColor: "#7C4A2A",
         sailColor: "#F7E9CD",
+        stripeColor: "#B22222",      // new
+        sailPattern: "solid",        // new: "solid" or "stripes"
         deckColor: "#C29A6B",
         gunPortColor: "#3E2C1A"
     },

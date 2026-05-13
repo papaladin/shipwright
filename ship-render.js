@@ -36,7 +36,7 @@ function lighten(hex, amount) {
 const COPPER_COLOR = "#b87333";
 
 // =====================================================
-// SAIL PATH HELPERS
+// SAIL PATH HELPERS (with stripe support)
 // =====================================================
 function curvedSailPath(mastX, yardY, sailWidth, sailHeight, tilt = 0) {
     const hw = sailWidth / 2;
@@ -50,18 +50,59 @@ function curvedSailPath(mastX, yardY, sailWidth, sailHeight, tilt = 0) {
     const bottomRightY = bottomY + tilt;
 
     const topMidY   = (topLeftY + topRightY) / 2;
-    const topBelly  = sailHeight * 0.05;
+    const topBelly  = sailHeight * -0.05;
     const topCtrlY  = topMidY + topBelly;
 
     const bottomMidY   = (bottomLeftY + bottomRightY) / 2;
     const bottomBelly  = sailHeight * 0.10;
     const bottomCtrlY  = bottomMidY + bottomBelly;
 
-    return `M ${leftX},${topLeftY} ` +
-           `Q ${mastX},${topCtrlY} ${rightX},${topRightY} ` +
-           `L ${rightX},${bottomRightY} ` +
-           `Q ${mastX},${bottomCtrlY} ${leftX},${bottomLeftY} ` +
-           `Z`;
+    const d = `M ${leftX},${topLeftY} ` +
+              `Q ${mastX},${topCtrlY} ${rightX},${topRightY} ` +
+              `L ${rightX},${bottomRightY} ` +
+              `Q ${mastX},${bottomCtrlY} ${leftX},${bottomLeftY} ` +
+              `Z`;
+
+    const pattern = state.appearance.sailPattern;
+    const sailColor = state.appearance.sailColor;
+    const stripeColor = state.appearance.stripeColor;
+
+    // 1. Base fill
+    onto("sailLayer", el("path", { d, fill: sailColor }));
+
+    // 2. Stripes overlay
+    if (pattern === "stripes") {
+        const clipId = "squareClip" + Math.random().toString(36).substr(2, 8);
+        const clip = el("clipPath", { id: clipId });
+        clip.appendChild(el("path", { d }));
+        getDefs().appendChild(clip);
+
+        const stripeG = el("g", { "clip-path": `url(#${clipId})` });
+        const stripeWidth = 18;
+        const offsetX = mastX;
+        const offsetY = yardY + sailHeight / 2;
+        for (let i = -40; i < 40; i++) {
+            if ((i + 20) % 2 === 0) {
+                const x = offsetX + i * stripeWidth;
+                const stripeRect = el("rect", {
+                    x: x - stripeWidth / 2,
+                    y: offsetY - 1000,
+                    width: stripeWidth,
+                    height: 2000,
+                    fill: stripeColor,
+                    transform: `rotate(${tilt}, ${mastX}, ${offsetY})`
+                });
+                stripeG.appendChild(stripeRect);
+            }
+        }
+        onto("sailLayer", stripeG);
+    }
+
+    onto("sailLayer", el("path", {
+        d, fill: "none", stroke: "#b8915e", "stroke-width": "1.5"
+    }));
+
+    return d;
 }
 
 function curvedLateenPath(yardBotX, yardBotY, yardTopX, yardTopY, tackX, tackY) {
@@ -84,6 +125,36 @@ function curvedLateenPath(yardBotX, yardBotY, yardTopX, yardTopY, tackX, tackY) 
         d += ` L ${points[i][0]} ${points[i][1]}`;
     }
     d += ` L ${tackX} ${tackY} Z`;
+
+    const sailColor = state.appearance.sailColor;
+    const pattern = state.appearance.sailPattern;
+    const stripeColor = state.appearance.stripeColor;
+
+    // 1. Base fill
+    onto("sailLayer", el("path", { d, fill: sailColor }));
+
+    // 2. Stripes overlay
+    if (pattern === "stripes") {
+        const clipId = "lateenClip" + Math.random().toString(36).substr(2, 8);
+        const clip = el("clipPath", { id: clipId });
+        clip.appendChild(el("path", { d }));
+        getDefs().appendChild(clip);
+
+        const stripeG = el("g", { "clip-path": `url(#${clipId})` });
+        const stripeWidth = 18;
+        const minX = Math.min(yardBotX, yardTopX, tackX) - 20;
+        const maxX = Math.max(yardBotX, yardTopX, tackX) + 20;
+        for (let x = minX; x < maxX; x += stripeWidth * 2) {
+            stripeG.appendChild(el("rect", {
+                x: x + stripeWidth, y: -200,
+                width: stripeWidth, height: 1400,
+                fill: stripeColor
+            }));
+        }
+        onto("sailLayer", stripeG);
+    }
+
+    onto("sailLayer", el("path", { d, fill: "none", stroke: "#b8915e", "stroke-width": "1.5" }));
     return d;
 }
 
@@ -111,12 +182,35 @@ function drawTriangularSail(tackX, tackY, headX, headY, clewX, clewY, sailColor)
               `Q ${leechCtrlX},${leechCtrlY} ${clewX},${clewY} ` +
               `Q ${footCtrlX},${footCtrlY} ${tackX},${tackY} Z`;
 
-    onto("sailLayer", el("path", {
-        d,
-        fill: sailColor,
-        stroke: "#b18753",
-        "stroke-width": "1.8"
-    }));
+    const pattern = state.appearance.sailPattern;
+    const stripeColor = state.appearance.stripeColor;
+    const baseColor = state.appearance.sailColor;
+
+    // 1. Base fill
+    onto("sailLayer", el("path", { d, fill: baseColor }));
+
+    // 2. Stripes overlay
+    if (pattern === "stripes") {
+        const clipId = "triClip" + Math.random().toString(36).substr(2, 8);
+        const clip = el("clipPath", { id: clipId });
+        clip.appendChild(el("path", { d }));
+        getDefs().appendChild(clip);
+
+        const stripeG = el("g", { "clip-path": `url(#${clipId})` });
+        const stripeWidth = 18;
+        const minX = Math.min(tackX, headX, clewX) - 20;
+        const maxX = Math.max(tackX, headX, clewX) + 20;
+        for (let x = minX; x < maxX; x += stripeWidth * 2) {
+            stripeG.appendChild(el("rect", {
+                x: x + stripeWidth, y: -200,
+                width: stripeWidth, height: 1400,
+                fill: stripeColor
+            }));
+        }
+        onto("sailLayer", stripeG);
+    }
+
+    onto("sailLayer", el("path", { d, fill: "none", stroke: "#b18753", "stroke-width": "1.8" }));
 
     function quadPt(ax, ay, cx, cy, bx, by, t) {
         const u = 1 - t;
@@ -648,18 +742,16 @@ function drawCabinsAndGallery(geo) {
 }
 
 // =====================================================
-// FLAG DRAWING (CORRECTED)
+// FLAG DRAWING
 // =====================================================
-function makeWavyPath(points, leftX, rightX, topY, bottomY, waveFreq, waveAmp) {
-    // points: array of {x, y} for the top edge, from left to right
-    // returns a path string for a wavy stripe between topCurve and bottomCurve
-    const steps = points.length - 1;
-    let d = `M ${points[0].x},${points[0].y}`;
-    for (let i = 1; i < points.length; i++) d += ` L ${points[i].x},${points[i].y}`;
-    d += ` L ${points[steps].x},${bottomY}`;
+function makeWavyPath(topPoints, leftX, rightX, topY, bottomY, waveFreq, waveAmp) {
+    const steps = topPoints.length - 1;
+    let d = `M ${topPoints[0].x},${topPoints[0].y}`;
+    for (let i = 1; i < topPoints.length; i++) d += ` L ${topPoints[i].x},${topPoints[i].y}`;
+    d += ` L ${topPoints[steps].x},${bottomY}`;
     for (let i = steps; i >= 0; i--) {
-        const x = points[i].x;
-        const y = bottomY + (points[i].y - topY);  // same wave offset vertically
+        const x = topPoints[i].x;
+        const y = bottomY + (topPoints[i].y - topY);
         d += ` L ${x},${y}`;
     }
     d += ' Z';
@@ -679,7 +771,6 @@ function drawFlappingFlag(cx, cy, flagWidth, flagHeight, primaryColor, secondary
     const waveAmp = flagWidth * 0.08;
     const steps = 8;
 
-    // Precompute top edge points for wavy stripes
     const topPoints = [];
     for (let i = 0; i <= steps; i++) {
         const t = i / steps;
@@ -693,19 +784,12 @@ function drawFlappingFlag(cx, cy, flagWidth, flagHeight, primaryColor, secondary
         grp.appendChild(el("path", { d, fill: primaryColor, stroke: "#5a4a3a", "stroke-width": "0.8" }));
     }
     else if (design.pattern === 'stripesH') {
-        // Determine colors array: if fixedColors and length == 3, use them in order; else alternate two colors
-        let colors = [];
-        if (design.fixedColors && design.fixedColors.length === 3) {
-            colors = design.fixedColors;
-        } else {
-            colors = [primaryColor, secondaryColor, primaryColor]; // fallback 3 stripes alternating
-        }
+        let colors = design.fixedColors || [primaryColor, secondaryColor, primaryColor];
         const stripeCount = colors.length;
         const stripeHeight = flagHeight / stripeCount;
         for (let s = 0; s < stripeCount; s++) {
             const stripeTop = topY + s * stripeHeight;
             const stripeBottom = stripeTop + stripeHeight;
-            // Build wavy stripe path
             let d = `M ${topPoints[0].x},${topPoints[0].y + s * stripeHeight}`;
             for (let i = 1; i < topPoints.length; i++) {
                 d += ` L ${topPoints[i].x},${topPoints[i].y + s * stripeHeight}`;
@@ -717,14 +801,12 @@ function drawFlappingFlag(cx, cy, flagWidth, flagHeight, primaryColor, secondary
             d += ' Z';
             grp.appendChild(el("path", { d, fill: colors[s], stroke: "none" }));
         }
-        // Outline
         const outlineD = makeWavyPath(topPoints, leftX, rightX, topY, bottomY, waveFreq, waveAmp);
         grp.appendChild(el("path", { d: outlineD, fill: "none", stroke: "#5a4a3a", "stroke-width": "0.8" }));
     }
     else if (design.pattern === 'stripesV') {
         const colors = design.fixedColors || [primaryColor, secondaryColor, primaryColor];
         const stripeW = flagWidth / colors.length;
-        // Clip to flag shape
         const clipId = 'flagClipV' + Math.random();
         const clip = el("clipPath", { id: clipId });
         const outlineD = makeWavyPath(topPoints, leftX, rightX, topY, bottomY, waveFreq, waveAmp);
@@ -742,10 +824,8 @@ function drawFlappingFlag(cx, cy, flagWidth, flagHeight, primaryColor, secondary
         grp.appendChild(el("path", { d: outlineD, fill: "none", stroke: "#5a4a3a", "stroke-width": "0.8" }));
     }
     else if (design.pattern === 'emblem') {
-        // Background
         const outlineD = makeWavyPath(topPoints, leftX, rightX, topY, bottomY, waveFreq, waveAmp);
         grp.appendChild(el("path", { d: outlineD, fill: design.emblemPrimary, stroke: "#5a4a3a", "stroke-width": "0.8" }));
-        // Emblem
         const emb = FLAG_EMBLEMS[design.emblem];
         if (emb) {
             const emblemScale = Math.min(flagWidth, flagHeight) / 20;
@@ -755,60 +835,34 @@ function drawFlappingFlag(cx, cy, flagWidth, flagHeight, primaryColor, secondary
             emblemG.appendChild(el("path", { d: emb.path, fill: emb.fg, stroke: "none" }));
             grp.appendChild(emblemG);
         }
-        } else if (design.pattern === 'uk') {
-        // Union Jack – clip everything to the wavy flag outline
+    }
+    else if (design.pattern === 'uk') {
         const outlineD = makeWavyPath(topPoints, leftX, rightX, topY, bottomY, waveFreq, waveAmp);
         const clipId = 'flagClipUK' + Math.random();
         const clip = el("clipPath", { id: clipId });
         clip.appendChild(el("path", { d: outlineD }));
         getDefs().appendChild(clip);
         const ukGroup = el("g", { "clip-path": `url(#${clipId})` });
-
-        // Blue field
         ukGroup.appendChild(el("rect", { x: leftX, y: topY, width: flagWidth, height: flagHeight, fill: '#012169' }));
-
-        // White diagonal cross (thick)
         const diagW = flagHeight * 0.12;
-        ukGroup.appendChild(el("polygon", {
-            points: `${leftX},${topY} ${rightX},${bottomY} ${rightX},${bottomY - diagW} ${leftX},${topY - diagW}`,
-            fill: '#FFFFFF'
-        }));
-        ukGroup.appendChild(el("polygon", {
-            points: `${rightX},${topY} ${leftX},${bottomY} ${leftX},${bottomY - diagW} ${rightX},${topY - diagW}`,
-            fill: '#FFFFFF'
-        }));
-
-        // Red diagonal cross (thin)
+        ukGroup.appendChild(el("polygon", { points: `${leftX},${topY} ${rightX},${bottomY} ${rightX},${bottomY - diagW} ${leftX},${topY - diagW}`, fill: '#FFFFFF' }));
+        ukGroup.appendChild(el("polygon", { points: `${rightX},${topY} ${leftX},${bottomY} ${leftX},${bottomY - diagW} ${rightX},${topY - diagW}`, fill: '#FFFFFF' }));
         const thinW = flagHeight * 0.06;
-        ukGroup.appendChild(el("polygon", {
-            points: `${leftX},${topY} ${rightX},${bottomY} ${rightX},${bottomY - thinW} ${leftX},${topY - thinW}`,
-            fill: '#C8102E'
-        }));
-        ukGroup.appendChild(el("polygon", {
-            points: `${rightX},${topY} ${leftX},${bottomY} ${leftX},${bottomY - thinW} ${rightX},${topY - thinW}`,
-            fill: '#C8102E'
-        }));
-
-        // Red central cross
+        ukGroup.appendChild(el("polygon", { points: `${leftX},${topY} ${rightX},${bottomY} ${rightX},${bottomY - thinW} ${leftX},${topY - thinW}`, fill: '#C8102E' }));
+        ukGroup.appendChild(el("polygon", { points: `${rightX},${topY} ${leftX},${bottomY} ${leftX},${bottomY - thinW} ${rightX},${topY - thinW}`, fill: '#C8102E' }));
         const crossW = flagHeight * 0.2;
         const crossH = flagWidth * 0.2;
         ukGroup.appendChild(el("rect", { x: cx - crossH/2, y: topY, width: crossH, height: flagHeight, fill: '#C8102E' }));
         ukGroup.appendChild(el("rect", { x: leftX, y: cy - crossW/2, width: flagWidth, height: crossW, fill: '#C8102E' }));
-
-        // White central cross (overlay)
         ukGroup.appendChild(el("rect", { x: cx - crossH/4, y: topY, width: crossH/2, height: flagHeight, fill: '#FFFFFF' }));
         ukGroup.appendChild(el("rect", { x: leftX, y: cy - crossW/4, width: flagWidth, height: crossW/2, fill: '#FFFFFF' }));
-
         grp.appendChild(ukGroup);
-        // Outline of the flag
         grp.appendChild(el("path", { d: outlineD, fill: "none", stroke: "#5a4a3a", "stroke-width": "0.8" }));
     }
-    
     else if (design.pattern === 'portugal') {
-        const colors = design.fixedColors; // green, red, yellow
+        const colors = design.fixedColors;
         const leftW = flagWidth * 0.4;
         const rightW = flagWidth * 0.6;
-        // Left green part using clip
         const clipId = 'flagClipP' + Math.random();
         const clip = el("clipPath", { id: clipId });
         const outlineD = makeWavyPath(topPoints, leftX, rightX, topY, bottomY, waveFreq, waveAmp);
@@ -817,7 +871,6 @@ function drawFlappingFlag(cx, cy, flagWidth, flagHeight, primaryColor, secondary
         const stripeG = el("g", { "clip-path": `url(#${clipId})` });
         stripeG.appendChild(el("rect", { x: leftX, y: topY, width: leftW, height: flagHeight, fill: colors[0] }));
         stripeG.appendChild(el("rect", { x: leftX + leftW, y: topY, width: rightW, height: flagHeight, fill: colors[1] }));
-        // Yellow sphere
         stripeG.appendChild(el("circle", { cx: leftX + leftW, cy: cy, r: flagHeight * 0.15, fill: colors[2] }));
         grp.appendChild(stripeG);
         grp.appendChild(el("path", { d: outlineD, fill: "none", stroke: "#5a4a3a", "stroke-width": "0.8" }));
@@ -853,7 +906,6 @@ function drawFlags(geo) {
         drawFlappingFlag(flagCx, flagCy, pos.flagW, pos.flagH, flagState.primary, flagState.secondary, flagState.design, pos.tilt);
     }
 
-    // Stern flag
     const sternFlag = state.flags.stern;
     if (sternFlag && sternFlag.enabled) {
         let sternPoleX, sternPoleTopY;
@@ -872,7 +924,7 @@ function drawFlags(geo) {
 }
 
 // =====================================================
-// MASTS & SAILS (unchanged depth order)
+// MASTS & SAILS
 // =====================================================
 function drawMastsAndSails(geo) {
     const { mastData, weatherDeckY, keelY, bspritRootX, bspritRootY, bspritTipX, bspritTipY, staysailsData } = geo;
@@ -909,8 +961,13 @@ function drawMastsAndSails(geo) {
                 const rightX = mastX + hw;
                 const topLeftY = yard.y - tilt;
                 const topRightY = yard.y + tilt;
-                onto("riggingLayer", el("line", { x1: leftX - 14, y1: topLeftY, x2: rightX + 14, y2: topRightY, stroke: "#7a5330", "stroke-width": "5" }));
-                onto("sailLayer", el("path", { d: curvedSailPath(mastX, yard.y, yard.width, yard.height, tilt), fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
+
+                onto("riggingLayer", el("line", {
+                    x1: leftX - 14, y1: topLeftY,
+                    x2: rightX + 14, y2: topRightY,
+                    stroke: "#7a5330", "stroke-width": "5"
+                }));
+                curvedSailPath(mastX, yard.y, yard.width, yard.height, tilt);
             }
         } else if (rigType === "gaff") {
             const mastH = mast.totalHeight;
@@ -926,6 +983,7 @@ function drawMastsAndSails(geo) {
                 const peakY      = throatY - peakLength * 0.38;
                 onto("riggingLayer", el("line", { x1: mastX, y1: throatY, x2: peakX, y2: peakY, stroke: "#7a5330", "stroke-width": "5" }));
                 onto("riggingLayer", el("line", { x1: mastX, y1: boomY, x2: boomEndX, y2: boomEndY, stroke: "#7a5330", "stroke-width": "5" }));
+
                 const leechLen   = Math.hypot(boomEndX - peakX, boomEndY - peakY);
                 const leechCtrlX = (peakX + boomEndX) / 2 + leechLen * 0.14;
                 const leechCtrlY = (peakY + boomEndY) / 2;
@@ -933,7 +991,30 @@ function drawMastsAndSails(geo) {
                 const footCtrlX  = (boomEndX + mastX) / 2;
                 const footCtrlY  = (boomEndY + boomY) / 2 + footLen * 0.06;
                 const d = `M ${mastX},${throatY} L ${peakX},${peakY} Q ${leechCtrlX},${leechCtrlY} ${boomEndX},${boomEndY} Q ${footCtrlX},${footCtrlY} ${mastX},${boomY} Z`;
-                onto("sailLayer", el("path", { d, fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
+
+                // Gaff sail stripes (base fill + overlay)
+                const pattern = state.appearance.sailPattern;
+                const stripeColor = state.appearance.stripeColor;
+                onto("sailLayer", el("path", { d, fill: sailColor }));
+                if (pattern === "stripes") {
+                    const clipId = "gaffClip" + Math.random().toString(36).substr(2,8);
+                    const clip = el("clipPath", { id: clipId });
+                    clip.appendChild(el("path", { d }));
+                    getDefs().appendChild(clip);
+                    const stripeG = el("g", { "clip-path": `url(#${clipId})` });
+                    const stripeW = 18;
+                    const minX = mastX - 20;
+                    const maxX = Math.max(peakX, boomEndX) + 20;
+                    for (let x = minX; x < maxX; x += stripeW * 2) {
+                        stripeG.appendChild(el("rect", {
+                            x: x + stripeW, y: -200, width: stripeW, height: 1400,
+                            fill: stripeColor
+                        }));
+                    }
+                    onto("sailLayer", stripeG);
+                }
+                onto("sailLayer", el("path", { d, fill: "none", stroke: "#b8915e", "stroke-width": "1.5" }));
+
                 function quadPt(ax, ay, cx, cy, bx, by, t) {
                     const u = 1 - t;
                     return { x: u*u*ax + 2*u*t*cx + t*t*bx, y: u*u*ay + 2*u*t*cy + t*t*by };
@@ -960,7 +1041,7 @@ function drawMastsAndSails(geo) {
                     const topLeftY = tsY - tilt;
                     const topRightY = tsY + tilt;
                     onto("riggingLayer", el("line", { x1: leftX - 16, y1: topLeftY, x2: rightX + 16, y2: topRightY, stroke: "#7a5330", "stroke-width": "5" }));
-                    onto("sailLayer", el("path", { d: curvedSailPath(mastX, tsY, tsW, tsH, tilt), fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
+                    curvedSailPath(mastX, tsY, tsW, tsH, tilt);
                 }
             }
         } else if (rigType === "lateen") {
@@ -977,17 +1058,7 @@ function drawMastsAndSails(geo) {
             onto("riggingLayer", el("line", { x1: yardBotX, y1: yardBotY, x2: yardTopX, y2: yardTopY, stroke: "#7a5330", "stroke-width": "6", "stroke-linecap": "round" }));
             const tackX = mastX + aftPart * 0.12;
             const tackY = weatherDeckY - 20;
-            onto("sailLayer", el("path", { d: curvedLateenPath(yardBotX, yardBotY, yardTopX, yardTopY, tackX, tackY), fill: sailColor, stroke: "#b8915e", "stroke-width": "1.5" }));
-            for (let i = 1; i <= 4; i++) {
-                const t = i / 5;
-                const sx1 = yardBotX + (yardTopX - yardBotX) * t;
-                const sy1 = yardBotY + (yardTopY - yardBotY) * t;
-                const sx2 = tackX + (sx1 - tackX) * 0.55;
-                const sy2 = tackY + (sy1 - tackY) * 0.55;
-                const mx = (sx1 + sx2) * 0.5 + 12;
-                const my = (sy1 + sy2) * 0.5 + 18;
-                onto("sailLayer", el("path", { d: `M ${sx1} ${sy1} Q ${mx} ${my} ${sx2} ${sy2}`, fill: "none", stroke: "#d8c09a", "stroke-width": "0.9", opacity: "0.55" }));
-            }
+            curvedLateenPath(yardBotX, yardBotY, yardTopX, yardTopY, tackX, tackY);
         }
 
         if (staysailsData && staysailsData.length > 0) {
@@ -1032,7 +1103,7 @@ function drawMastsAndSails(geo) {
         const topLeftY = sy - tilt;
         const topRightY = sy + tilt;
         onto("riggingLayer", el("line", { x1: leftX - 10, y1: topLeftY, x2: rightX + 10, y2: topRightY, stroke: "#7a5330", "stroke-width": "4" }));
-        onto("sailLayer", el("path", { d: curvedSailPath(sx, sy, spritW, spritH, tilt), fill: sailColor, stroke: "#b18753", "stroke-width": "1.5" }));
+        curvedSailPath(sx, sy, spritW, spritH, tilt);
     }
 
     drawStandingRigging(geo);
